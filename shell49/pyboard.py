@@ -116,8 +116,42 @@ class TelnetToSerial:
         else:
             return n_waiting
 
+
 class Pyboard:
-    def __init__(self, device, baudrate=115200, user='micro', password='python', wait=0):
+
+    def __init__(self, port=None, baudrate=0, wait=0, ip=None, user='micro', password='python'):
+        """Connect to MicroPython board via serial or telnet (if IP specified)."""
+
+        if ip:
+            self.serial = TelnetToSerial(ip, user, password, read_timeout=10)
+        else:
+            import serial
+            delayed = False
+            for attempt in range(wait + 1):
+                try:
+                    if serial.VERSION == '3.0':
+                        self.serial = serial.Serial(port, baudrate=baudrate, inter_byte_timeout=1)
+                    else:
+                        self.serial = serial.Serial(port, baudrate=baudrate, interCharTimeout=1)
+                    break
+                except (OSError, IOError): # Py2 and Py3 have different errors
+                    if wait == 0:
+                        continue
+                    if attempt == 0:
+                        sys.stdout.write('Waiting {} seconds for pyboard '.format(wait))
+                        delayed = True
+                time.sleep(1)
+                sys.stdout.write('.')
+                sys.stdout.flush()
+            else:
+                if delayed:
+                    print('')
+                raise PyboardError('failed to access ' + device)
+            if delayed:
+                print('')
+
+
+    def __init__X(self, device, baudrate=115200, user='micro', password='python', wait=0):
         # BEB: does not work with URLs. Changed.
         # if device and device[0].isdigit() and device[-1].isdigit() and device.count('.') == 3:
         if ':' in device or '/' in device:

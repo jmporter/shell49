@@ -1,6 +1,5 @@
 from print_ import dprint, eprint, qprint
 from print_ import DIR_COLOR, END_COLOR, PY_COLOR
-from const import BUFFER_SIZE
 import globals_
 
 import os
@@ -18,6 +17,8 @@ IS_UPY is used to determine if a funcion is running on the host (False)
 or remote (True). It is set to True in function Device.remote().
 """
 IS_UPY = False
+BUFFER_SIZE = 128
+HAS_BUFFER = True
 
 
 def escape(str):
@@ -67,9 +68,9 @@ def column_print(fmt, rows, print_func):
     for row in rows:
         if isinstance(row, str):
             # Print a seperator line
-            print_func(' '.join([row * width[i] for i in range(num_cols)]))
+            print_func('  '.join([row * width[i] for i in range(num_cols)]))
         else:
-            print_func(' '.join([align_cell(fmt[i], row[i], width[i])
+            print_func('  '.join([align_cell(fmt[i], row[i], width[i])
                                  for i in range(num_cols)]))
 
 
@@ -182,34 +183,6 @@ def resolve_path(path):
     return '/'.join(new_comps)
 
 
-def get_dev_and_path(filename):
-    """Determines if a given file is located locally or remotely. We assume
-       that any directories from the pyboard take precendence over local
-       directories of the same name. /flash and /sdcard are associated with
-       the default device. /dev_name/path where dev_name is the name of a
-       given device is also considered to be associaed with the named device.
-
-       If the file is associated with a remote device, then this function
-       returns a tuple (dev, dev_filename) where dev is the device and
-       dev_filename is the portion of the filename relative to the device.
-
-       If the file is not associated with the remote device, then the dev
-       portion of the returned tuple will be None.
-    """
-    if globals_.DEFAULT_DEV:
-        if globals_.DEFAULT_DEV.is_root_path(filename):
-            return (globals_.DEFAULT_DEV, filename)
-    test_filename = filename + '/'
-    with globals_.DEV_LOCK:
-        for dev in globals_.DEVS:
-            if test_filename.startswith(dev.name_path):
-                dev_filename = filename[len(dev.name_path)-1:]
-                if dev_filename == '':
-                    dev_filename = '/'
-                return (dev, dev_filename)
-    return (None, filename)
-
-
 def remote_repr(i):
     """Helper function to deal with types which we can't send to the pyboard."""
     repr_str = repr(i)
@@ -226,11 +199,11 @@ def print_bytes(byte_str):
         oprint(str(byte_str, encoding='utf8'))
 
 
-def auto(func, filename, *args, **kwargs):
+def auto(devs, func, filename, *args, **kwargs):
     """If `filename` is a remote file, then this function calls func on the
        micropython board, otherwise it calls it locally.
     """
-    dev, dev_filename = get_dev_and_path(filename)
+    dev, dev_filename = devs.get_dev_and_path(filename)
     if dev is None:
         if dev_filename[0] == '~':
             dev_filename = os.path.expanduser(dev_filename)
@@ -248,9 +221,9 @@ def board_name(default):
     return repr(name)
 
 
-def cat(src_filename, dst_file):
+def cat(devs, src_filename, dst_file):
     """Copies the contents of the indicated file to an already opened file."""
-    (dev, dev_filename) = get_dev_and_path(src_filename)
+    (dev, dev_filename) = devs.get_dev_and_path(src_filename)
     if dev is None:
         with open(dev_filename, 'rb') as txtfile:
             for line in txtfile:
@@ -284,17 +257,17 @@ def copy_file(src_filename, dst_filename):
         return False
 
 
-def cp(src_filename, dst_filename):
+def cp(devs, src_filename, dst_filename):
     """Copies one file to another. The source file may be local or remote and
        the destnation file may be local or remote.
     """
-    src_dev, src_dev_filename = get_dev_and_path(src_filename)
-    dst_dev, dst_dev_filename = get_dev_and_path(dst_filename)
+    src_dev, src_dev_filename = devs.get_dev_and_path(src_filename)
+    dst_dev, dst_dev_filename = devs.get_dev_and_path(dst_filename)
     if src_dev is dst_dev:
         # src and dst are either on the same remote, or both are on the host
-        return auto(copy_file, src_filename, dst_dev_filename)
+        return auto(devs, copy_file, src_filename, dst_dev_filename)
 
-    filesize = auto(get_filesize, src_filename)
+    filesize = auto(devs, get_filesize, src_filename)
 
     if dst_dev is None:
         # Copying from remote to host
@@ -439,9 +412,9 @@ def make_directory(dirname):
     return True
 
 
-def mkdir(filename):
+def mkdir(devs, filename):
     """Creates a directory."""
-    return auto(make_directory, filename)
+    return auto(devs, make_directory, filename)
 
 
 def remove_file(filename, recursive=False, force=False):
@@ -468,17 +441,17 @@ def remove_file(filename, recursive=False, force=False):
     return True
 
 
-def rm(filename, recursive=False, force=False):
+def rm(devs, filename, recursive=False, force=False):
     """Removes a file or directory tree."""
-    return auto(remove_file, filename, recursive, force)
+    return auto(devs, remove_file, filename, recursive, force)
 
 
-def make_dir(dst_dir, dry_run, recursed):
+def make_dir(devs, dst_dir, dry_run, recursed):
     """Creates a directory. Produces information in case of dry run.
     Isues error where necessary.
     """
     parent = os.path.split(dst_dir.rstrip('/'))[0] # Check for nonexistent parent
-    parent_files = auto(listdir_stat, parent) if parent else True # Relative dir
+    parent_files = auto(devs, listdir_stat, parent) if parent else True # Relative dir
     if dry_run:
         if recursed: # Assume success: parent not actually created yet
             qprint("Creating directory {}".format(dst_dir))
@@ -491,15 +464,15 @@ def make_dir(dst_dir, dry_run, recursed):
     return True
 
 
-def file_dir(directory):
+def file_dir(devs, directory):
     """Dict name->stat of files in directory,
-       filted by sync_includes, sync_excludes
+       filted by rsync_includes, rsync_excludes
     """
-    files = auto(listdir_stat, directory)
+    inc = devs.config.get(devs.default_device().name, 'rsync_includes', fallback='*.py,*.json,*.txt,*.html').split(',')
+    exc = devs.config.get(devs.default_device().name, 'rsync_excludes', fallback='.*,__*__').split(',')
+    files = auto(devs, listdir_stat, directory)
     if not files: files = []
     d = {}
-    inc = globals_.ARGS.rsync_includes.split(',')
-    exc = globals_.ARGS.rsync_excludes.split(',')
     for name, stat in files:
         y = any(map((lambda x: fnmatch.fnmatch(name, x)), inc)) or is_dir(stat)
         n = any(map((lambda x: fnmatch.fnmatch(name, x)), exc))
@@ -510,7 +483,7 @@ def file_dir(directory):
     return d
 
 
-def rsync(src_dir, dst_dir, mirror, dry_run, recursed):
+def rsync(devs, src_dir, dst_dir, mirror, dry_run, recursed):
     """Synchronizes 2 directory trees."""
     # This test is a hack to avoid errors when accessing /flash. When the
     # cache synchronisation issue is solved it should be removed
@@ -518,25 +491,25 @@ def rsync(src_dir, dst_dir, mirror, dry_run, recursed):
         return
 
     # check that source is a directory
-    sstat = auto(get_stat, src_dir)
+    sstat = auto(devs, get_stat, src_dir)
     if not is_dir(sstat):
         eprint("*** Source {} is not a directory".format(src_dir))
         return
 
     # create destination directory if it does not exist
-    sstat = auto(get_stat, dst_dir)
+    sstat = auto(devs, get_stat, dst_dir)
     if not file_exists(sstat):
         qprint("Create {} on remote".format(dst_dir))
         if not dry_run:
-            if not make_dir(dst_dir, dry_run, recursed):
+            if not make_dir(devs, dst_dir, dry_run, recursed):
                 eprint("*** Unable to create directory", dst_dir)
     elif not is_dir(sstat):
         eprint("*** Destination {} is not a directory".format(src_dir))
         return
 
     # get list of src & dst files and stats
-    d_src = file_dir(src_dir)
-    d_dst = file_dir(dst_dir)
+    d_src = file_dir(devs, src_dir)
+    d_dst = file_dir(devs, dst_dir)
 
     # determine what needs to be copied or deleted
     set_dst = set(d_dst.keys())
@@ -558,7 +531,7 @@ def rsync(src_dir, dst_dir, mirror, dry_run, recursed):
         dst = os.path.join(dst_dir, f)
         qprint("Adding {}".format(dst))
         if is_dir(d_src[f]):
-            rsync(src, dst, mirror, dry_run, recursed)
+            rsync(devs, src, dst, mirror, dry_run, recursed)
         else:
             if not dry_run:
                 if not cp(src, dst):
@@ -570,7 +543,7 @@ def rsync(src_dir, dst_dir, mirror, dry_run, recursed):
         dst = os.path.join(dst_dir, f)
         qprint("Removing {}".format(dst))
         if not dry_run:
-            res = rm(dst, recursive=True, force=True)
+            res = rm(devs, dst, recursive=True, force=True)
             if not res:
                 eprint("Cannot remove {}", dst)
 
@@ -581,7 +554,7 @@ def rsync(src_dir, dst_dir, mirror, dry_run, recursed):
         if is_dir(d_src[f]):
             if is_dir(d_dst[f]):
                 # src and dst are directories
-                rsync(src, dst, mirror, dry_run, recursed)
+                rsync(devs, src, dst, mirror, dry_run, recursed)
             else:
                 msg = "Source '{}' is a directory and destination " \
                       "'{}' is a file. Ignoring"
@@ -600,7 +573,7 @@ def rsync(src_dir, dst_dir, mirror, dry_run, recursed):
                             stat_mtime(d_src[f]) -stat_mtime(d_dst[f])))
                     qprint(msg.format(src, dst))
                     if not dry_run:
-                        if not cp(src, dst):
+                        if not cp(devs, src, dst):
                             eprint("*** Unable to update {} --> {}".format(src, dst))
                 else:
                     dprint(f, "NO update src time:", stat_mtime(d_src[f]), "dst time", stat_mtime(d_dst[f]), "delta", stat_mtime(d_src[f])-stat_mtime(d_dst[f]))

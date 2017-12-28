@@ -1,12 +1,12 @@
 from print_ import qprint, dprint, eprint
 from pyboard import Pyboard, PyboardError
-from remote_op import test_unhexlify, listdir, remote_repr, set_time, epoch, \
+from remote_op import listdir, remote_repr, set_time, epoch, \
     osdebug, board_name, test_buffer
-import const
 
 import inspect
 import time
 import serial
+import os
 
 
 class DeviceError(Exception):
@@ -16,24 +16,17 @@ class DeviceError(Exception):
 
 class Device(object):
 
-    def __init__(self, pyb):
+    def __init__(self, pyb, config, board):
         self.pyb = pyb
+        self.config = config
+        self.name = board        # temporary, replace below with real name obtained from board
         self.has_buffer = False  # needs to be set for remote_eval to work
-        if not const.BINARY_XFER:
-            self.has_buffer = self.remote_eval(test_buffer)
-            eprint("BEB Device.__init__ test_buffer --> has_buffer=", self.has_buffer)
-        if self.has_buffer:
-            dprint("Setting has_buffer to True")
-        elif not self.remote_eval(test_unhexlify):
-            raise ShellError('rshell needs MicroPython firmware with ubinascii.unhexlify')
-        else:
-            dprint("MicroPython has unhexlify")
         self.root_dirs = ['/{}/'.format(dir) for dir in self.remote_eval(listdir, '/')]
-        dprint("Synchronizing time of remote to host")
         self.sync_time()
         self.esp_osdebug(None)
-        self.name = self.remote_eval(board_name, self.default_board_name())
-        if not self.name: self.name = "unknown"
+        # try to get the actual board name
+        self.name = self.remote_eval(board_name, board)
+        self.has_buffer = self.remote_eval(test_buffer)
 
     def check_pyb(self):
         """Raises an error if the pyb object was closed."""
@@ -48,9 +41,6 @@ class Device(object):
 
     def is_root_path(self, filename):
         """Determines if 'filename' corresponds to a directory on this device."""
-        # HACK: label all root-level files and folders as on remote
-        if filename.startswith('/') and filename.count('/') == 1:
-            return True
         test_filename = filename + '/'
         for root_dir in self.root_dirs:
             if test_filename.startswith(root_dir):
@@ -72,6 +62,9 @@ class Device(object):
 
     def remote(self, func, *args, xfer_func=None, **kwargs):
         """Calls func with the indicated args on the micropython board."""
+        time_offset = self.config.getint(self.name, 'time_offset', fallback=946684800)
+        buffer_size = self.config.getint(self.name, 'buffer_size', fallback=128)
+        has_buffer = self.has_buffer
         args_arr = [remote_repr(i) for i in args]
         kwargs_arr = ["{}={}".format(k, remote_repr(v)) for k, v in kwargs.items()]
         func_str = inspect.getsource(func)
@@ -82,12 +75,10 @@ class Device(object):
         func_str += '    print("None")\n'
         func_str += 'else:\n'
         func_str += '    print(output)\n'
-        func_str = func_str.replace('TIME_OFFSET', '{}'.format(const.TIME_OFFSET))
-        func_str = func_str.replace('HAS_BUFFER', '{}'.format(self.has_buffer))
-        func_str = func_str.replace('BUFFER_SIZE', '{}'.format(const.BUFFER_SIZE))
+        func_str = func_str.replace('TIME_OFFSET', '{}'.format(time_offset))
+        func_str = func_str.replace('HAS_BUFFER', '{}'.format(has_buffer))
+        func_str = func_str.replace('BUFFER_SIZE', '{}'.format(buffer_size))
         func_str = func_str.replace('IS_UPY', 'True')
-        dprint("device.remote, TIME_OFFSET={}, HAS_BUFFER={}, BUFFER_SIZE={}".
-            format(const.TIME_OFFSET, self.has_buffer, const.BUFFER_SIZE))
         dprint('----- About to send %d bytes of code to the pyboard -----' % len(func_str))
         dprint(func_str)
         dprint('-----')
@@ -172,17 +163,17 @@ class Device(object):
 
 class DeviceSerial(Device):
 
-    def __init__(self, port, baud, wait):
+    def __init__(self, config, board_name, port):
         self.port = port
-        self.baud = baud
-        self.wait = wait
+        baud = config.getint(board_name, 'baudrate', fallback=115200)
+        wait = config.getint(board_name, 'wait', fallback=0)
 
         if wait and not os.path.exists(port):
             toggle = False
             try:
-                sys.stdout.write("Waiting %d seconds for serial port '%s' to exist" % (wait, port))
+                sys.stdout.write("Waiting %d seconds for serial port '%s' to exist" % (wait, self.port))
                 sys.stdout.flush()
-                while wait and not os.path.exists(port):
+                while wait and not os.path.exists(self.port):
                     sys.stdout.write('.')
                     sys.stdout.flush()
                     time.sleep(0.5)
@@ -192,18 +183,18 @@ class DeviceSerial(Device):
             except KeyboardInterrupt:
                 raise DeviceError('Interrupted')
 
-        self.dev_name_short = port
-        self.dev_name_long = '%s at %d baud' % (port, baud)
+        self.dev_name_short = self.port
+        self.dev_name_long = '%s at %d baud' % (self.port, baud)
 
         try:
-            pyb = Pyboard(port, baudrate=baud, wait=wait)
+            pyb = Pyboard(self.port, baudrate=baud, wait=wait)
         except PyboardError as err:
             print(err)
             sys.exit(1)
 
         # Bluetooth devices take some time to connect at startup, and writes
         # issued while the remote isn't connected will fail. So we send newlines
-        # with pauses until one of our writes suceeds.
+        # with pauses until one of our writes succeeds.
         try:
             # we send a Control-C which should kill the current line
             # assuming we're talking to tha micropython repl. If we send
@@ -226,10 +217,7 @@ class DeviceSerial(Device):
             sys.stdout.write('\n')
 
         # In theory the serial port is now ready to use
-        Device.__init__(self, pyb)
-
-    def default_board_name(self):
-        return 'pyboard'
+        Device.__init__(self, pyb, config, board_name)
 
     def is_serial_port(self, port):
         return self.dev_name_short == port
@@ -249,9 +237,9 @@ class DeviceSerial(Device):
 
 class DeviceNet(Device):
 
-    def __init__(self, name, ip_address, user, password):
-        self.dev_name_short = '{} ({})'.format(name, ip_address)
-        self.dev_name_long = self.dev_name_short
+    def __init__(self, ip_address, config, board):
+        user = config.get(board, 'user', fallback='micro')
+        password = config.get(board, 'password', fallback='python')
 
         try:
             pyb = Pyboard(ip_address, user=user, password=password)
@@ -259,10 +247,9 @@ class DeviceNet(Device):
             raise DeviceError('No response from {}'.format(ip_address))
         except KeyboardInterrupt:
             raise DeviceError('Interrupted')
-        Device.__init__(self, pyb)
-
-    def default_board_name(self):
-        return 'wipy'
+        Device.__init__(self, pyb, config, board)
+        self.dev_name_short = '{} ({})'.format(self.name, ip_address)
+        self.dev_name_long = self.dev_name_short
 
     def timeout(self, timeout=None):
         """There is no equivalent to timeout for the telnet connection."""

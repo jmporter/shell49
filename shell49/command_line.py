@@ -1,4 +1,4 @@
-import rshell.main
+import shell49.main
 
 def main():
-    rshell.main.main()
+    shell49.main.main()
