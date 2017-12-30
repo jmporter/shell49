@@ -16,28 +16,75 @@ class DeviceError(Exception):
 
 class Device(object):
 
-    def __init__(self, pyb, config, board):
-        self.pyb = pyb
+    def __init__(self, config, default_name):
         self.config = config
-        self.name = board        # temporary, replace below with real name obtained from board
         self.has_buffer = False  # needs to be set for remote_eval to work
+        self.id = config.find_board_by_name(default_name)
+
+    def _set_pyb(self, pyb, default_name):
+        self.pyb = pyb
+        # try to retrieve the current name from the board
+        name = self.remote_eval(board_name, default_name)
+        # update id to match true board name
+        self.id = self.config.find_board_by_name(name, create=True)
+        self.has_buffer = self.remote_eval(test_buffer)
         self.root_dirs = ['/{}/'.format(dir) for dir in self.remote_eval(listdir, '/')]
         self.sync_time()
         self.esp_osdebug(None)
-        # try to get the actual board name
-        self.name = self.remote_eval(board_name, board)
-        self.has_buffer = self.remote_eval(test_buffer)
+
+
+    def get_id(self):
+        return self.id
+        
+
+    def get(self, option, fallback=None):
+        return self.config.get(self.id, option, fallback=fallback)
+
+
+    def getboolean(self, option, fallback=False):
+        return self.config.getboolean(self.id, option, fallback=fallback)
+
+
+    def getint(self, option, fallback=0):
+        return self.config.getint(self.id, option, fallback=fallback)
+
+
+    def name(self):
+        return self.config.get(self.id, 'name')
+
+
+    def set(self, option, value):
+        self.config.set(self.id, option, value)
+
+
+    def options(self):
+        return self.config.items(self.id, raw=False)
+
+
+    def remove_option(self, name):
+        self.config.remove_option(self.id, name)
+
+
+    def address(self):
+        raise DeviceError("Device.address called - Device is abstract class")
+
+
+    def name_path(self):
+        return '/{}/'.format(self.name())
+
 
     def check_pyb(self):
         """Raises an error if the pyb object was closed."""
         if self.pyb is None:
             raise DeviceError('serial port %s closed' % self.dev_name_short)
 
+
     def close(self):
         """Closes the serial port."""
         if self.pyb and self.pyb.serial:
             self.pyb.serial.close()
         self.pyb = None
+
 
     def is_root_path(self, filename):
         """Determines if 'filename' corresponds to a directory on this device."""
@@ -47,8 +94,18 @@ class Device(object):
                 return True
         return False
 
+
+    def root_directories(self):
+        return self.root_dirs
+
+
     def is_serial_port(self, port):
         return False
+
+
+    def is_telnet(self):
+        return False
+
 
     def read(self, num_bytes):
         """Reads data from the pyboard over the serial port."""
@@ -60,10 +117,11 @@ class Device(object):
             self.close()
             raise DeviceError('serial port %s closed' % self.dev_name_short)
 
+
     def remote(self, func, *args, xfer_func=None, **kwargs):
         """Calls func with the indicated args on the micropython board."""
-        time_offset = self.config.getint(self.name, 'time_offset', fallback=946684800)
-        buffer_size = self.config.getint(self.name, 'buffer_size', fallback=128)
+        time_offset = self.get('time_offset', fallback=946684800)
+        buffer_size = self.getint('buffer_size', fallback=128)
         has_buffer = self.has_buffer
         args_arr = [remote_repr(i) for i in args]
         kwargs_arr = ["{}={}".format(k, remote_repr(v)) for k, v in kwargs.items()]
@@ -101,6 +159,7 @@ class Device(object):
         dprint('-----')
         return output
 
+
     def remote_eval(self, func, *args, **kwargs):
         """Calls func with the indicated args on the micropython board, and
            converts the response back into python by using eval.
@@ -111,6 +170,7 @@ class Device(object):
         except Exception as e:
             eprint("*** remote_eval({}, {}, {}) -> \n{} is not valid python code".format(func.__name__, args, kwargs, res))
             return None
+
 
     def execfile(self, file):
         """Transfers file to board and runs it.
@@ -163,10 +223,11 @@ class Device(object):
 
 class DeviceSerial(Device):
 
-    def __init__(self, config, board_name, port):
+    def __init__(self, port, config, name=None):
+        super().__init__(config, name)
         self.port = port
-        baud = config.getint(board_name, 'baudrate', fallback=115200)
-        wait = config.getint(board_name, 'wait', fallback=0)
+        baud = self.getint('baudrate', fallback=115200)
+        wait = self.getint('wait', fallback=0)
 
         if wait and not os.path.exists(port):
             toggle = False
@@ -183,14 +244,11 @@ class DeviceSerial(Device):
             except KeyboardInterrupt:
                 raise DeviceError('Interrupted')
 
-        self.dev_name_short = self.port
-        self.dev_name_long = '%s at %d baud' % (self.port, baud)
-
         try:
             pyb = Pyboard(self.port, baudrate=baud, wait=wait)
         except PyboardError as err:
-            print(err)
-            sys.exit(1)
+            eprint(err)
+            # sys.exit(1)
 
         # Bluetooth devices take some time to connect at startup, and writes
         # issued while the remote isn't connected will fail. So we send newlines
@@ -217,10 +275,13 @@ class DeviceSerial(Device):
             sys.stdout.write('\n')
 
         # In theory the serial port is now ready to use
-        Device.__init__(self, pyb, config, board_name)
+        super()._set_pyb(pyb, name)
 
     def is_serial_port(self, port):
-        return self.dev_name_short == port
+        return self.port == port
+
+    def address(self):
+        return self.port
 
     def timeout(self, timeout=None):
         """Sets the timeout associated with the serial port."""
@@ -237,9 +298,11 @@ class DeviceSerial(Device):
 
 class DeviceNet(Device):
 
-    def __init__(self, ip_address, config, board):
-        user = config.get(board, 'user', fallback='micro')
-        password = config.get(board, 'password', fallback='python')
+    def __init__(self, ip_address, config, name=None):
+        super().__init(config, name)
+        self.ip_address = ip_address
+        user = self.get('user', fallback='micro')
+        password = self.get('board', 'password', fallback='python')
 
         try:
             pyb = Pyboard(ip_address, user=user, password=password)
@@ -247,10 +310,15 @@ class DeviceNet(Device):
             raise DeviceError('No response from {}'.format(ip_address))
         except KeyboardInterrupt:
             raise DeviceError('Interrupted')
-        Device.__init__(self, pyb, config, board)
-        self.dev_name_short = '{} ({})'.format(self.name, ip_address)
-        self.dev_name_long = self.dev_name_short
+
+        self._set_pyb(pyb, name)
 
     def timeout(self, timeout=None):
         """There is no equivalent to timeout for the telnet connection."""
         return None
+
+    def address(self):
+        return self.ip_address
+
+    def is_telnet(self):
+        return True

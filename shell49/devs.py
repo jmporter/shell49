@@ -15,79 +15,67 @@ class Devs:
     """List of known devices."""
 
     def __init__(self, config):
-        self.devs = []
-        self.config = config
-        self.default = None
-        self.lock = threading.RLock()
+        self._devices = []
+        self._default_dev = None
+        self._config = config
 
 
-    def default_device(self):
-        if not self.default:
+    def default_device(self, index=None, name=None):
+        if index:
+            try:
+                if self._devices[index-1]: self._default_dev = self._devices[index-1]
+            except:
+                pass
+        if name:
+            self._default_dev = self.find_device_by_name(name)
+        if not self._default_dev:
             raise DevsError("no board connected")
-        return self.default
+        return self._default_dev
 
 
-    def get(option, fallback=None):
-        section = self.default.name if self.default else Config.DEFAULT
-        return self.config.get(section, option, fallback=default)
-
-
-    def getboolean(option, fallback=False):
-        section = self.default.name if self.default else Config.DEFAULT
-        return self.config.getboolean(section, option, fallback=default)
-
-
-    def getint(option, fallback=0):
-        section = self.default.name if self.default else Config.DEFAULT
-        return self.config.getint(section, option, fallback=default)
+    def devices(self):
+        for dev in self._devices:
+            if dev:
+                yield dev
 
 
     def find_device_by_name(self, name):
-        """Tries to find a board by name."""
-        with self.lock:
-            for d in self.devs:
-                if d.name == name: return d
-            return self.default_device()
+        """Find board by name."""
+        for d in self._devices:
+            if d.name == name: return d
+        return self._default_dev_device()
 
 
     def find_serial_device_by_port(self, port):
-        """Tries to find a board by port name."""
-        with self.lock:
-            for dev in self.devs:
-                if dev.is_serial_port(port):
-                    return dev
+        """Find board by port name."""
+        for dev in self._devices:
+            if dev.is_serial_port(port):
+                return dev
         return None
 
 
     def num_devices(self):
-        with self.lock:
-            n = 0
-            for d in self.devs:
-                if d: n += 1
-            return n
+        return sum(x is not None for x in self._devices)
 
 
-    def connect_serial(self, port, board_name=Config.DEFAULT):
+    def connect_serial(self, port, board_name=None):
         """Connect to MicroPython board plugged into the specfied port."""
-        qprint("Connecting to '%s' ..." % port)
-        baudrate = self.config.getint(board_name, 'baudrate', fallback=115200)
-        wait = self.config.getint(board_name, 'wait', fallback=0)
-        dev = DeviceSerial(self.config, Config.DEFAULT, port)
+        qprint("Connecting via serial to {} ...".format(port))
+        dev = DeviceSerial(port, self._config, board_name)
         self.add_device(dev)
 
 
-    def connect_telnet(self, ip_address, board_name=Config.DEFAULT):
+    def connect_telnet(self, ip_address, board_name=None):
         """Connect to MicroPython board at specified IP address."""
-        qprint("Connecting to '%s' ..." % ip_address)
-        dev = DeviceNet(self.config, board_name, ip_address)
+        qprint("Connecting via telnet to {}' ...".format(ip_address))
+        dev = DeviceNet(ip_address, self._config, board_name)
         self.add_device(dev)
 
 
     def add_device(self, dev):
         """Adds a device to the list of devices we know about."""
-        with self.lock:
-            self.devs.append(dev)
-            if not self.default:  self.default = dev
+        self._devices.append(dev)
+        if not self._default_dev:  self._default_dev = dev
 
 
     def get_dev_and_path(self, filename):
@@ -103,14 +91,13 @@ class Devs:
            If the file is not associated with the remote device, then the dev
            portion of the returned tuple will be None.
         """
-        if self.default and self.default.is_root_path(filename):
-            return (self.default, filename)
+        if self._default_dev and self._default_dev.is_root_path(filename):
+            return (self._default_dev, filename)
         test_filename = filename + '/'
-        with self.lock:
-            for dev in self.devs:
-                if test_filename.startswith(dev.name):
-                    dev_filename = filename[len(dev.name)-1:]
-                    if dev_filename == '':
-                        dev_filename = '/'
-                    return (dev, dev_filename)
+        for dev in self._devices:
+            if test_filename.startswith(dev.name()):
+                dev_filename = filename[len(dev.name())-1:]
+                if dev_filename == '':
+                    dev_filename = '/'
+                return (dev, dev_filename)
         return (None, filename)

@@ -13,7 +13,6 @@ from config import Config
 from shell import Shell
 from devs import Devs
 from device import DeviceError
-from connect import autoconnect
 from print_ import oprint, qprint, eprint, dprint
 import print_
 
@@ -121,8 +120,6 @@ Environment variables:
         except DeviceError as err:
             eprint(err)
             autoscan()
-
-        # autoconnect()
 
         if args.filename:
             with open(args.filename) as cmd_file:

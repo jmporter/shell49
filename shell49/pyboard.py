@@ -4,37 +4,7 @@
 pyboard interface
 
 This module provides the Pyboard class, used to communicate with and
-control the pyboard over a serial USB connection.
-
-Example usage:
-
-    import pyboard
-    pyb = pyboard.Pyboard('/dev/ttyACM0')
-
-Or:
-
-    pyb = pyboard.Pyboard('192.168.1.1')
-
-Then:
-
-    pyb.enter_raw_repl()
-    pyb.exec('pyb.LED(1).on()')
-    pyb.exit_raw_repl()
-
-Note: if using Python2 then pyb.exec must be written as pyb.exec_.
-To run a script from the local machine on the board and print out the results:
-
-    import pyboard
-    pyboard.execfile('test.py', device='/dev/ttyACM0')
-
-This script can also be run directly.  To execute a local script, use:
-
-    ./pyboard.py test.py
-
-Or:
-
-    python pyboard.py test.py
-
+control the pyboard over a serial USB or telent connection.
 """
 
 import sys
@@ -121,18 +91,36 @@ class Pyboard:
 
     def __init__(self, port=None, baudrate=0, wait=0, ip=None, user='micro', password='python'):
         """Connect to MicroPython board via serial or telnet (if IP specified)."""
+        self.port = port
+        self.baudrate = baudrate
+        self.wait = wait
+        self.ip = ip
+        self.user = user
+        self.password = password
+        self.connect()
 
-        if ip:
-            self.serial = TelnetToSerial(ip, user, password, read_timeout=10)
+    def address(self):
+        return self.ip if self.ip else self.port
+
+    def ip(self):
+        return ip
+
+    def port(self):
+        return port
+
+    def connect(self):
+        if self.ip:
+            self.serial = TelnetToSerial(self.ip, self.user, self.password, read_timeout=10)
         else:
             import serial
             delayed = False
+            wait = self.wait
             for attempt in range(wait + 1):
                 try:
                     if serial.VERSION == '3.0':
-                        self.serial = serial.Serial(port, baudrate=baudrate, inter_byte_timeout=1)
+                        self.serial = serial.Serial(self.port, baudrate=self.baudrate, inter_byte_timeout=1)
                     else:
-                        self.serial = serial.Serial(port, baudrate=baudrate, interCharTimeout=1)
+                        self.serial = serial.Serial(self.port, baudrate=self.baudrate, interCharTimeout=1)
                     break
                 except (OSError, IOError): # Py2 and Py3 have different errors
                     if wait == 0:
@@ -149,40 +137,6 @@ class Pyboard:
                 raise PyboardError('failed to access ' + device)
             if delayed:
                 print('')
-
-
-    def __init__X(self, device, baudrate=115200, user='micro', password='python', wait=0):
-        # BEB: does not work with URLs. Changed.
-        # if device and device[0].isdigit() and device[-1].isdigit() and device.count('.') == 3:
-        if ':' in device or '/' in device:
-            # device looks like a port name
-            import serial
-            delayed = False
-            for attempt in range(wait + 1):
-                try:
-                    if serial.VERSION == '3.0':
-                        self.serial = serial.Serial(device, baudrate=baudrate, inter_byte_timeout=1)
-                    else:
-                        self.serial = serial.Serial(device, baudrate=baudrate, interCharTimeout=1)
-                    break
-                except (OSError, IOError): # Py2 and Py3 have different errors
-                    if wait == 0:
-                        continue
-                    if attempt == 0:
-                        sys.stdout.write('Waiting {} seconds for pyboard '.format(wait))
-                        delayed = True
-                time.sleep(1)
-                sys.stdout.write('.')
-                sys.stdout.flush()
-            else:
-                if delayed:
-                    print('')
-                raise PyboardError('failed to access ' + device)
-            if delayed:
-                print('')
-        else:
-            # try to connect wirelessly
-            self.serial = TelnetToSerial(device, user, password, read_timeout=10)
 
     def close(self):
         self.serial.close()
@@ -281,11 +235,11 @@ class Pyboard:
         return self.follow(timeout, data_consumer)
 
     def eval(self, expression):
-        ret = self.exec_('print({})'.format(expression))
+        ret = self.exec('print({})'.format(expression))
         ret = ret.strip()
         return ret
 
-    def exec_(self, command):
+    def exec(self, command):
         ret, ret_err = self.exec_raw(command)
         if ret_err:
             raise PyboardError('exception', ret, ret_err)
@@ -294,74 +248,4 @@ class Pyboard:
     def execfile(self, filename):
         with open(filename, 'rb') as f:
             pyfile = f.read()
-        return self.exec_(pyfile)
-
-    def get_time(self):
-        t = str(self.eval('pyb.RTC().datetime()'), encoding='utf8')[1:-1].split(', ')
-        return int(t[4]) * 3600 + int(t[5]) * 60 + int(t[6])
-
-# in Python2 exec is a keyword so one must use "exec_"
-# but for Python3 we want to provide the nicer version "exec"
-setattr(Pyboard, "exec", Pyboard.exec_)
-
-def execfile(filename, device='/dev/ttyACM0', baudrate=115200, user='micro', password='python'):
-    pyb = Pyboard(device, baudrate, user, password)
-    pyb.enter_raw_repl()
-    output = pyb.execfile(filename)
-    stdout_write_bytes(output)
-    pyb.exit_raw_repl()
-    pyb.close()
-
-def main():
-    import argparse
-    cmd_parser = argparse.ArgumentParser(description='Run scripts on the pyboard.')
-    cmd_parser.add_argument('--device', default='/dev/ttyACM0', help='the serial device or the IP address of the pyboard')
-    cmd_parser.add_argument('-b', '--baudrate', default=115200, help='the baud rate of the serial device')
-    cmd_parser.add_argument('-u', '--user', default='micro', help='the telnet login username')
-    cmd_parser.add_argument('-p', '--password', default='python', help='the telnet login password')
-    cmd_parser.add_argument('-c', '--command', help='program passed in as string')
-    cmd_parser.add_argument('-w', '--wait', default=0, type=int, help='seconds to wait for USB connected board to become available')
-    cmd_parser.add_argument('--follow', action='store_true', help='follow the output after running the scripts [default if no scripts given]')
-    cmd_parser.add_argument('files', nargs='*', help='input files')
-    args = cmd_parser.parse_args()
-
-    def execbuffer(buf):
-        try:
-            pyb = Pyboard(args.device, args.baudrate, args.user, args.password, args.wait)
-            pyb.enter_raw_repl()
-            ret, ret_err = pyb.exec_raw(buf, timeout=None, data_consumer=stdout_write_bytes)
-            pyb.exit_raw_repl()
-            pyb.close()
-        except PyboardError as er:
-            print(er)
-            sys.exit(1)
-        except KeyboardInterrupt:
-            sys.exit(1)
-        if ret_err:
-            stdout_write_bytes(ret_err)
-            sys.exit(1)
-
-    if args.command is not None:
-        execbuffer(args.command.encode('utf-8'))
-
-    for filename in args.files:
-        with open(filename, 'rb') as f:
-            pyfile = f.read()
-            execbuffer(pyfile)
-
-    if args.follow or (args.command is None and len(args.files) == 0):
-        try:
-            pyb = Pyboard(args.device, args.baudrate, args.user, args.password, args.wait)
-            ret, ret_err = pyb.follow(timeout=None, data_consumer=stdout_write_bytes)
-            pyb.close()
-        except PyboardError as er:
-            print(er)
-            sys.exit(1)
-        except KeyboardInterrupt:
-            sys.exit(1)
-        if ret_err:
-            stdout_write_bytes(ret_err)
-            sys.exit(1)
-
-if __name__ == "__main__":
-    main()
+        return self.exec(pyfile)

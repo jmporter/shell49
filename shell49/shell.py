@@ -1,5 +1,5 @@
-from print_ import dprint, eprint, oprint, qprint
-from print_ import PROMPT_COLOR, END_COLOR, PY_COLOR
+from print_ import dprint, eprint, oprint, qprint, cprint
+from print_ import PROMPT_COLOR, END_COLOR, PY_COLOR, DIR_COLOR, OUTPUT_COLOR
 import print_
 import globals_
 from config import Config
@@ -10,7 +10,8 @@ from remote_op import is_pattern, resolve_path, auto, get_mode, mode_isdir, \
     chdir, get_stat, stat_mode, mode_exists, listdir_stat, is_visible, \
     decorated_filename, print_cols, mode_isfile, cat, column_print, \
     get_ip_address, get_mac_address, get_time, osdebug, get_filesize, \
-    cp, rsync, mkdir, rm, process_pattern, print_long, trim, unescape
+    cp, rsync, mkdir, rm, process_pattern, print_long, trim, unescape, \
+    listdir_matches, escape
 from getch import getch
 
 from configparser import NoSectionError
@@ -343,36 +344,39 @@ class Shell(cmd.Cmd):
             # (i.e. abs_match is /foo and the user hit TAB).
             # So we'll supply the matching board names as possible completions.
             # Since they're all treated as directories we leave the trailing slash.
-            with globals_.DEV_LOCK:
+            if match[0] == '/':
+                completions += [dev.name_path() for dev in self.devs.devices() if dev.name_path().startswith(abs_match)]
+            else:
+                completions += [dev.name_path()[1:] for dev in self.devs.devices() if dev.name_path().startswith(abs_match)]
+            try:
+                # Add root directories of the default device
+                def_dev = self.devs.default_device()
                 if match[0] == '/':
-                    completions += [dev.name_path for dev in globals_.DEVS if dev.name_path.startswith(abs_match)]
+                    completions += [root_dir for root_dir in def_dev.root_dirs if root_dir.startswith(match)]
                 else:
-                    completions += [dev.name_path[1:] for dev in globals_.DEVS if dev.name_path.startswith(abs_match)]
-            if globals_.DEFAULT_DEV:
-                # Add root directories of the default device (i.e. /flash/ and /sd/)
-                if match[0] == '/':
-                    completions += [root_dir for root_dir in globals_.DEFAULT_DEV.root_dirs if root_dir.startswith(match)]
-                else:
-                    completions += [root_dir[1:] for root_dir in globals_.DEFAULT_DEV.root_dirs if root_dir[1:].startswith(match)]
+                    completions += [root_dir[1:] for root_dir in def_dev.root_dirs if root_dir[1:].startswith(match)]
+            except DevsError:
+                pass
         else:
             # This means that there are at least 2 slashes in abs_match. If one
             # of them matches a board name then we need to remove the board
             # name from fixed. Since the results from listdir_matches won't
             # contain the board name, we need to prepend each of the completions.
-            with globals_.DEV_LOCK:
-                for dev in globals_.DEVS:
-                    if abs_match.startswith(dev.name_path):
-                        prepend = dev.name_path[:-1]
+            for dev in self.devs.devices():
+                if abs_match.startswith(dev.name_path()):
+                    prepend = dev.name_path()[:-1]
 
-        paths = sorted(auto(self.devs, self.devs, listdir_matches, match))
+        paths = sorted(auto(self.devs, listdir_matches, match))
         for path in paths:
             path = prepend + path
             completions.append(escape(path.replace(fixed, '', 1)))
         return completions
 
+
     def directory_complete(self, text, line, begidx, endidx):
         """Figure out what directories match the completion."""
         return [filename for filename in self.filename_complete(text, line, begidx, endidx) if filename[-1] == '/']
+
 
     def line_to_args(self, line):
         """This will convert the line passed into the do_xxx functions into
@@ -419,6 +423,7 @@ class Shell(cmd.Cmd):
             args = parser.parse_args(args)
         return args
 
+
     def do_args(self, line):
         """args [arguments...]
 
@@ -429,69 +434,84 @@ class Shell(cmd.Cmd):
         for idx in range(len(args)):
             self.print("arg[%d] = '%s'" % (idx, args[idx]))
 
-    def do_boards(self, _):
-        """boards
 
-           Lists the devices that shell49 is currently connected to.
+    def do_boards(self, line):
+        """boards          List connected devices.
+        boards ID       Make board ID the default board.
+        boards NAME     Make board NAME the default board.
         """
+        try:
+            self.devs.default_device(id=int(line))
+        except ValueError:
+            self.devs.default_device(name=line)
         rows = []
         rows.append(("ID", "Name", "Port/IP", "Status", "Dirs"))
-        with self.devs.lock:
-            for index, dev in enumerate(self.devs.devs):
-                if not dev:
-                    continue
-                if dev is self.devs.default_device():
-                    dirs = [dir[:-1] for dir in dev.root_dirs]
-                else:
-                    dirs = []
-                dirs += ['/{}{}'.format(dev.name, dir)[:-1] for dir in dev.root_dirs]
-                dirs = ', '.join(dirs)
-                default = '*' if dev is self.devs.default_device() else ''
-                rows.append((default+str(index+1), dev.name, dev.dev_name_short, dev.status(), dirs))
+        for index, dev in enumerate(self.devs.devices()):
+            if dev is self.devs.default_device():
+                dirs = [dir[:-1] for dir in dev.root_directories()]
+            else:
+                dirs = []
+            dirs += ['/{}{}'.format(dev.name(), dir)[:-1] for dir in dev.root_directories()]
+            dirs = ', '.join(dirs)
+            default = '*' if dev is self.devs.default_device() else ''
+            rows.append((default+str(index+1), dev.name(), dev.address(), dev.status(), dirs))
         if len(rows) > 1:
             column_print('><<< ', rows, self.print)
         else:
             print('No boards connected')
 
 
-    def do_config(self, line):
-        """config                         Print configuration of default board and list of boards.
-        config OPTION VALUE            Set option of default board.
-        config default OPTION VALUE    Set default option.
-        config del OPTION              Remove configuration option.
-        config del default OPTION      Remove default configuration option.
-        config del board BOARD_NAME    Remove board configuration.
+    argparse_config = (
+        add_arg(
+            '-d', '--delete',
+            dest='delete',
+            action='store_true',
+            help='delete option',
+            default=False
+        ),
+        add_arg(
+            '--default',
+            dest='default',
+            action='store_true',
+            help='set default option value',
+            default=False
+        ),
+        add_arg(
+            'option',
+            metavar='OPTION',
+            nargs='?',
+            help='option name'
+        ),
+        add_arg(
+            'value',
+            metavar='VALUE',
+            nargs='*',
+            help='option value'
+        ),
+    )
 
-           Inquire / edit configuration.
+
+    def do_config(self, line):
+        """config                                   Print option values of default board.
+       config [-d] [--default] OPTION [VALUE]   Get/set OPTION of default board to VALUE.
         """
-        s = line.split()
-        board_name = self.devs.default_device().name
-        try:
-            if len(s) == 0:
-                section_items = self.config.items(Config.DEFAULT)
-                try:
-                    section_items = self.config.items(board_name)
-                except NoSectionError:
-                    pass
-                oprint("{:>20s} = {}".format('name', board_name))
-                for (k, v) in section_items:
-                    oprint("{:>20s} = {}".format(k, v))
-                oprint("Boards: {}".format(', '.join(self.config.sections())))
-            elif s[0].lower() == 'del':
-                if s[1].lower() == 'board':
-                    self.config.remove_section(s[2])
-                elif s[1].lower() == 'default':
-                    self.config.remove_option(Config.DEFAULT, s[2])
-                else:
-                    self.config.remove_option(board_name, s[1])
-            elif s[0].lower() == 'default':
-                self.config.set(Config.DEFAULT, s[1], s[2])
-            elif len(s) == 2:
-                self.config.set(board_name, s[0], s[1])
+        if line == '':
+            for (k, v) in self.devs.default_device().options():
+                color = DIR_COLOR if self.config.is_default_option(k, v) else OUTPUT_COLOR
+                cprint("{:>20s} = {}".format(k, v), color=color)
             return
-        except (NoSectionError, IndexError):
-            pass
-        eprint("Invalid arguments, '{}'. Type 'help config' for details.".format(line))
+        args = self.line_to_args(line)
+        section = 'DEFAULT' if args.default else self.devs.default_device().get_id()
+        if args.delete:
+            if args.option:
+                self.config.remove_option(section, args.option)
+        else:
+            self.config.set(section, args.option, ' '.join(args.value))
+
+
+    def do_flash(self):
+        """flash"""
+        raise Exception("Implement shell.do_flash!")
 
 
     def complete_cat(self, text, line, begidx, endidx):
@@ -518,8 +538,10 @@ class Shell(cmd.Cmd):
                 continue
             cat(self.devs, filename, self.stdout)
 
+
     def complete_cd(self, text, line, begidx, endidx):
         return self.directory_complete(text, line, begidx, endidx)
+
 
     def do_cd(self, line):
         """cd DIRECTORY
@@ -544,6 +566,7 @@ class Shell(cmd.Cmd):
             auto(self.devs, chdir, dirname)
         else:
             eprint("Directory '%s' does not exist" % dirname)
+
 
     def do_connect(self, line):
         """connect TYPE TYPE_PARAMS
@@ -581,8 +604,10 @@ class Shell(cmd.Cmd):
         else:
             eprint('Unrecognized connection TYPE: {}'.format(connect_type))
 
+
     def complete_cp(self, text, line, begidx, endidx):
         return self.filename_complete(text, line, begidx, endidx)
+
 
     def do_cp(self, line):
         """cp SOURCE DEST               Copy a single SOURCE file to DEST file.
@@ -672,8 +697,10 @@ class Shell(cmd.Cmd):
         args = self.line_to_args(line)
         self.print(*args)
 
+
     def complete_edit(self, text, line, begidx, endidx):
         return self.filename_complete(text, line, begidx, endidx)
+
 
     def do_edit(self, line):
         """edit FILE
@@ -713,8 +740,10 @@ class Shell(cmd.Cmd):
                     self.print('Updating {} ...'.format(filename))
                     cp(local_filename, filename)
 
+
     def complete_filesize(self, text, line, begidx, endidx):
         return self.filename_complete(text, line, begidx, endidx)
+
 
     def do_filesize(self, line):
         """filesize FILE
@@ -728,8 +757,10 @@ class Shell(cmd.Cmd):
         filename = resolve_path(line)
         self.print(auto(self.devs, get_filesize, filename))
 
+
     def complete_filetype(self, text, line, begidx, endidx):
         return self.filename_complete(text, line, begidx, endidx)
+
 
     def do_filetype(self, line):
         """filetype FILE
@@ -752,6 +783,7 @@ class Shell(cmd.Cmd):
         else:
             self.print('missing')
 
+
     def do_help(self, line):
         """help [COMMAND]
 
@@ -762,7 +794,6 @@ class Shell(cmd.Cmd):
 
            prints out help for all commands.
         """
-        eprint("BEB shell.do_help", line)
         # We provide a help function so that we can trim the leading spaces
         # from the docstrings. The builtin help function doesn't do that.
         if not line:
@@ -813,8 +844,10 @@ class Shell(cmd.Cmd):
         ),
     )
 
+
     def complete_ls(self, text, line, begidx, endidx):
         return self.filename_complete(text, line, begidx, endidx)
+
 
     def do_ls(self, line):
         """ls [-a] [-l] [FILE|DIRECTORY|PATTERN]...
@@ -866,8 +899,10 @@ class Shell(cmd.Cmd):
             if len(files) > 0:
                 print_cols(sorted(files), self.print, self.columns)
 
+
     def complete_mkdir(self, text, line, begidx, endidx):
         return self.filename_complete(text, line, begidx, endidx)
+
 
     def do_mkdir(self, line):
         """mkdir DIRECTORY...
@@ -879,6 +914,7 @@ class Shell(cmd.Cmd):
             filename = resolve_path(filename)
             if not mkdir(self.devs, filename):
                 eprint('Unable to create %s' % filename)
+
 
     def repl_serial_to_stdout(self, dev):
         """Runs as a thread which has a sole purpose of readding bytes from
@@ -918,6 +954,7 @@ class Shell(cmd.Cmd):
             except DeviceError:
                 # The device is no longer present.
                 return
+
 
     def do_repl(self, line):
         """repl [board-name] [~ line [~]]
@@ -1001,6 +1038,7 @@ class Shell(cmd.Cmd):
         repl_thread.join()
         self.print(END_COLOR)
 
+
     argparse_cp = (
         add_arg(
             '-r', '--recursive',
@@ -1016,6 +1054,7 @@ class Shell(cmd.Cmd):
             help='Pattern or files and directories to copy'
         ),
     )
+
 
     argparse_rm = (
         add_arg(
@@ -1040,8 +1079,10 @@ class Shell(cmd.Cmd):
         ),
     )
 
+
     def complete_rm(self, text, line, begidx, endidx):
         return self.filename_complete(text, line, begidx, endidx)
+
 
     def do_rm(self, line):
         """rm [-f|--force] FILE...            Remove one or more files
@@ -1071,6 +1112,7 @@ class Shell(cmd.Cmd):
                 if not args.force:
                     eprint("Unable to remove '{}'".format(filename))
                 break
+
 
     def do_shell(self, line):
         """!some-shell-command args
@@ -1220,12 +1262,14 @@ class Shell(cmd.Cmd):
         print_.QUIET = 'on' in line
         oprint("Quiet is {}".format('on' if print_.QUIET else 'off'))
 
+
     def do_quit(self, line):
         """quit
 
         Quit rshell. Same as Control-D, Control-C, or exit.
         """
         raise KeyboardInterrupt
+
 
     def do_exit(self, line):
         """exit
