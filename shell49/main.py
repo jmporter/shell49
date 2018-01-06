@@ -21,14 +21,14 @@ import argparse
 
 def real_main():
     """The main program."""
-    default_config = os.getenv('SHELL49_CONFIG_FILE') or '~/.shell49_rc'
+    default_config = os.getenv('SHELL49_CONFIG_FILE') or '~/.shell49_rc.py'
     default_editor = os.getenv('SHELL49_EDITOR') or os.getenv('VISUAL') or os.getenv('EDITOR') or 'vi'
     default_nocolor = False
     default_debug = False
     default_quiet = False
 
     parser = argparse.ArgumentParser(
-        prog="rshell",
+        prog="shell49",
         usage="%(prog)s [options] [command]",
         description="Remote Shell for a MicroPython board.",
         epilog=(
@@ -116,6 +116,7 @@ Environment variables:
         devs = Devs(config)
 
         try:
+            pass
             devs.connect_serial('/dev/cu.SLAB_USBtoUART')
         except DeviceError as err:
             eprint(err)

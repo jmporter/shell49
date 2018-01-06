@@ -2,11 +2,13 @@ from print_ import qprint, dprint, eprint
 from pyboard import Pyboard, PyboardError
 from remote_op import listdir, remote_repr, set_time, epoch, \
     osdebug, board_name, test_buffer
+import remote_op
 
 import inspect
 import time
 import serial
 import os
+import socket
 
 
 class DeviceError(Exception):
@@ -28,25 +30,20 @@ class Device(object):
         # update id to match true board name
         self.id = self.config.find_board_by_name(name, create=True)
         self.has_buffer = self.remote_eval(test_buffer)
+        dprint("find has_buffer", self.has_buffer)
         self.root_dirs = ['/{}/'.format(dir) for dir in self.remote_eval(listdir, '/')]
+        dprint("root_dirs", self.root_dirs)
         self.sync_time()
-        self.esp_osdebug(None)
+        dprint("synced time")
+        # self.esp_osdebug(None)
 
 
     def get_id(self):
         return self.id
-        
-
-    def get(self, option, fallback=None):
-        return self.config.get(self.id, option, fallback=fallback)
 
 
-    def getboolean(self, option, fallback=False):
-        return self.config.getboolean(self.id, option, fallback=fallback)
-
-
-    def getint(self, option, fallback=0):
-        return self.config.getint(self.id, option, fallback=fallback)
+    def get(self, option, default=None):
+        return self.config.get(self.id, option, default=default)
 
 
     def name(self):
@@ -57,12 +54,16 @@ class Device(object):
         self.config.set(self.id, option, value)
 
 
-    def options(self):
-        return self.config.items(self.id, raw=False)
-
-
     def remove_option(self, name):
-        self.config.remove_option(self.id, name)
+        self.config.remove(self.id, name)
+
+
+    def options(self):
+        return self.config.options(self.id)
+
+
+    def config_string(self):
+        return self.config.config_string(self.id)
 
 
     def address(self):
@@ -76,7 +77,7 @@ class Device(object):
     def check_pyb(self):
         """Raises an error if the pyb object was closed."""
         if self.pyb is None:
-            raise DeviceError('serial port %s closed' % self.dev_name_short)
+            raise DeviceError('serial port %s closed' % self.address())
 
 
     def close(self):
@@ -115,13 +116,16 @@ class Device(object):
         except (serial.serialutil.SerialException, TypeError):
             # Write failed - assume that we got disconnected
             self.close()
-            raise DeviceError('serial port %s closed' % self.dev_name_short)
+            raise DeviceError('serial port %s closed' % self.address())
 
 
     def remote(self, func, *args, xfer_func=None, **kwargs):
         """Calls func with the indicated args on the micropython board."""
-        time_offset = self.get('time_offset', fallback=946684800)
-        buffer_size = self.getint('buffer_size', fallback=128)
+        time_offset = self.get('time_offset', default=946684800)
+        # buffer_size must be consistent between remote and local methods
+        # e.g. for recv_file_from_host &  send_file_to_remote
+        buffer_size = self.get('buffer_size', default=128)
+        remote_op.BUFFER_SIZE = buffer_size
         has_buffer = self.has_buffer
         args_arr = [remote_repr(i) for i in args]
         kwargs_arr = ["{}={}".format(k, remote_repr(v)) for k, v in kwargs.items()]
@@ -153,7 +157,7 @@ class Device(object):
             self.pyb.exit_raw_repl()
         except (serial.serialutil.SerialException, TypeError):
             self.close()
-            raise DeviceError('serial port %s closed' % self.dev_name_short)
+            raise DeviceError('serial port %s closed' % self.address())
         dprint('-----Response-----')
         dprint(output)
         dprint('-----')
@@ -185,6 +189,14 @@ class Device(object):
             eprint("*** ", ex)
 
 
+    def exec(self, code):
+        self.pyb.enter_raw_repl()
+        res = self.pyb.exec(code)
+        self.pyb.exit_raw_repl()
+        print(repr(res))
+        return res
+
+
     def status(self):
         """Returns a status string to indicate whether we're connected to
            the pyboard or not.
@@ -197,12 +209,11 @@ class Device(object):
     def sync_time(self):
         """Sets the time on the pyboard to match the time on the host."""
         now = time.localtime(time.time())
-        self.remote(set_time, (now.tm_year, now.tm_mon, now.tm_mday, None,
-                               now.tm_hour, now.tm_min, now.tm_sec, 0))
-        global TIME_OFFSET
-        dt = time.time() - float(self.remote(epoch))
-        dprint("TIME_OFFSET set to", int(dt))
-        TIME_OFFSET = int(dt)
+        self.remote(set_time, now.tm_year, now.tm_mon, now.tm_mday,
+                              now.tm_hour, now.tm_min, now.tm_sec)
+        # determine actual time offset
+        # dt = time.time() - float(self.remote(epoch))
+        # eprint("TIME_OFFSET is", int(dt))
 
 
     def esp_osdebug(self, level=None):
@@ -218,7 +229,7 @@ class Device(object):
         except (serial.serialutil.SerialException, BrokenPipeError, TypeError):
             # Write failed - assume that we got disconnected
             self.close()
-            raise DeviceError('{} closed'.format(self.dev_name_short))
+            raise DeviceError('{} closed'.format(self.name()))
 
 
 class DeviceSerial(Device):
@@ -226,8 +237,8 @@ class DeviceSerial(Device):
     def __init__(self, port, config, name=None):
         super().__init__(config, name)
         self.port = port
-        baud = self.getint('baudrate', fallback=115200)
-        wait = self.getint('wait', fallback=0)
+        baud = self.get('baudrate', default=115200)
+        wait = self.get('wait', default=0)
 
         if wait and not os.path.exists(port):
             toggle = False
@@ -299,13 +310,13 @@ class DeviceSerial(Device):
 class DeviceNet(Device):
 
     def __init__(self, ip_address, config, name=None):
-        super().__init(config, name)
+        super().__init__(config, name)
         self.ip_address = ip_address
-        user = self.get('user', fallback='micro')
-        password = self.get('board', 'password', fallback='python')
+        user = self.get('user', default='micro')
+        password = self.get('password', default='python')
 
         try:
-            pyb = Pyboard(ip_address, user=user, password=password)
+            pyb = Pyboard(ip=ip_address, user=user, password=password)
         except (socket.timeout, OSError):
             raise DeviceError('No response from {}'.format(ip_address))
         except KeyboardInterrupt:

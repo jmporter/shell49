@@ -37,9 +37,9 @@ setup(
       'Topic :: Utilities',
   ],
   install_requires=[
-      'pyserial',
-      'pyudev >= 0.16',
+      'pyserial >= 2.0',
       'esptool >= 2.1',
+      'zeroconf >= 0.19'
   ],
   entry_points = {
       'console_scripts': [

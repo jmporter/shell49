@@ -12,15 +12,16 @@ class DevsError(Exception):
 
 
 class Devs:
-    """List of known devices."""
+    """List of connected devices."""
 
     def __init__(self, config):
         self._devices = []
         self._default_dev = None
-        self._config = config
+        self.config = config
 
 
     def default_device(self, index=None, name=None):
+        """Set/get default device id"""
         if index:
             try:
                 if self._devices[index-1]: self._default_dev = self._devices[index-1]
@@ -34,6 +35,7 @@ class Devs:
 
 
     def devices(self):
+        """Iterate over all devices"""
         for dev in self._devices:
             if dev:
                 yield dev
@@ -43,7 +45,7 @@ class Devs:
         """Find board by name."""
         for d in self._devices:
             if d.name == name: return d
-        return self._default_dev_device()
+        return self._default_dev
 
 
     def find_serial_device_by_port(self, port):
@@ -55,20 +57,21 @@ class Devs:
 
 
     def num_devices(self):
+        """Number of connected devices"""
         return sum(x is not None for x in self._devices)
 
 
     def connect_serial(self, port, board_name=None):
         """Connect to MicroPython board plugged into the specfied port."""
         qprint("Connecting via serial to {} ...".format(port))
-        dev = DeviceSerial(port, self._config, board_name)
+        dev = DeviceSerial(port, self.config, board_name)
         self.add_device(dev)
 
 
     def connect_telnet(self, ip_address, board_name=None):
         """Connect to MicroPython board at specified IP address."""
-        qprint("Connecting via telnet to {}' ...".format(ip_address))
-        dev = DeviceNet(ip_address, self._config, board_name)
+        qprint("Connecting via telnet to {} ...".format(ip_address))
+        dev = DeviceNet(ip_address, self.config, board_name)
         self.add_device(dev)
 
 
@@ -95,8 +98,8 @@ class Devs:
             return (self._default_dev, filename)
         test_filename = filename + '/'
         for dev in self._devices:
-            if test_filename.startswith(dev.name()):
-                dev_filename = filename[len(dev.name())-1:]
+            if dev.name() and test_filename.startswith('/' + dev.name()):
+                dev_filename = filename[len(dev.name())+1:]
                 if dev_filename == '':
                     dev_filename = '/'
                 return (dev, dev_filename)

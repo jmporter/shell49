@@ -1,6 +1,5 @@
 from print_ import dprint, eprint, qprint
 from print_ import DIR_COLOR, END_COLOR, PY_COLOR
-import globals_
 
 import os
 import sys
@@ -17,8 +16,7 @@ IS_UPY is used to determine if a funcion is running on the host (False)
 or remote (True). It is set to True in function Device.remote().
 """
 IS_UPY = False
-BUFFER_SIZE = 128
-HAS_BUFFER = True
+BUFFER_SIZE = 2048
 
 
 def escape(str):
@@ -123,7 +121,7 @@ def parse_pattern(s):
     return None, None # Invalid or nonexistent pattern
 
 
-def validate_pattern(fn):
+def validate_pattern(devs, cur_dir, fn):
     """On success return an absolute path and a pattern.
     Otherwise print a message and return None, None
     """
@@ -131,8 +129,8 @@ def validate_pattern(fn):
     if directory is None:
         print_err("Invalid pattern {}.".format(fn))
         return None, None
-    target = resolve_path(directory)
-    mode = auto(get_mode, target)
+    target = resolve_path(cur_dir, directory)
+    mode = auto(devs, get_mode, target)
     if not mode_exists(mode):
         print_err("cannot access '{}': No such file or directory".format(fn))
         return None, None
@@ -142,29 +140,29 @@ def validate_pattern(fn):
     return directory, pattern
 
 
-def process_pattern(fn):
+def process_pattern(devs, cur_dir, fn):
     """Return a list of paths matching a pattern (or None on error).
     """
-    directory, pattern = validate_pattern(fn)
+    directory, pattern = validate_pattern(devs, cur_dir, fn)
     if directory is not None:
-        filenames = fnmatch.filter(auto(listdir, directory), pattern)
+        filenames = fnmatch.filter(auto(devs, listdir, directory), pattern)
         if filenames:
             return [directory + '/' + sfn for sfn in filenames]
         else:
             print_err("cannot access '{}': No such file or directory".format(fn))
 
 
-def resolve_path(path):
+def resolve_path(cur_dir, path):
     """Resolves path and converts it into an absolute path."""
     if path[0] == '~':
         # ~ or ~user
         path = os.path.expanduser(path)
     if path[0] != '/':
         # Relative path
-        if globals_.cur_dir[-1] == '/':
-            path = globals_.cur_dir + path
+        if cur_dir[-1] == '/':
+            path = cur_dir + path
         else:
-            path = globals_.cur_dir + '/' + path
+            path = cur_dir + '/' + path
     comps = path.split('/')
     new_comps = []
     for comp in comps:
@@ -199,26 +197,34 @@ def print_bytes(byte_str):
         oprint(str(byte_str, encoding='utf8'))
 
 
+def board_name(default):
+    """Returns the boards name (if available)."""
+    try:
+        import config
+        name = config.name
+    except:
+        try:
+            import board
+            name = board.name
+        except:
+            name = default
+    return repr(name)
+
+
 def auto(devs, func, filename, *args, **kwargs):
     """If `filename` is a remote file, then this function calls func on the
        micropython board, otherwise it calls it locally.
     """
     dev, dev_filename = devs.get_dev_and_path(filename)
     if dev is None:
+        # use large buffer on the host
+        global BUFFER_SIZE
+        BUFFER_SIZE = 4096
         if dev_filename[0] == '~':
             dev_filename = os.path.expanduser(dev_filename)
         return func(dev_filename, *args, **kwargs)
-    return dev.remote_eval(func, dev_filename, *args, **kwargs)
-
-
-def board_name(default):
-    """Returns the boards name (if available)."""
-    try:
-        import board
-        name = board.name
-    except ImportError:
-        name = default
-    return repr(name)
+    res = dev.remote_eval(func, dev_filename, *args, **kwargs)
+    return res
 
 
 def cat(devs, src_filename, dst_file):
@@ -458,7 +464,7 @@ def make_dir(devs, dst_dir, dry_run, recursed):
         elif parent_files is None:
             qprint("Unable to create {}".format(dst_dir))
         return True
-    if not mkdir(dst_dir):
+    if not mkdir(devs, dst_dir):
         print_err("Unable to create {}".format(dst_dir))
         return False
     return True
@@ -468,8 +474,9 @@ def file_dir(devs, directory):
     """Dict name->stat of files in directory,
        filted by rsync_includes, rsync_excludes
     """
-    inc = devs.config.get(devs.default_device().name, 'rsync_includes', fallback='*.py,*.json,*.txt,*.html').split(',')
-    exc = devs.config.get(devs.default_device().name, 'rsync_excludes', fallback='.*,__*__').split(',')
+    dev, filename = devs.get_dev_and_path(directory)
+    inc = devs.config.get(0, 'rsync_includes', default='*.py,*.json,*.txt,*.html').split(',')
+    exc = devs.config.get(0, 'rsync_excludes', default='.*,__*__').split(',')
     files = auto(devs, listdir_stat, directory)
     if not files: files = []
     d = {}
@@ -479,12 +486,13 @@ def file_dir(devs, directory):
         if y and not n:
             d[name] = stat
         else:
-            dprint("squashing", name)
+            dprint("squashing {} y={} n={}".format(name, y, n))
     return d
 
 
 def rsync(devs, src_dir, dst_dir, mirror, dry_run, recursed):
     """Synchronizes 2 directory trees."""
+
     # This test is a hack to avoid errors when accessing /flash. When the
     # cache synchronisation issue is solved it should be removed
     if not isinstance(src_dir, str) or not len(src_dir):
@@ -501,7 +509,7 @@ def rsync(devs, src_dir, dst_dir, mirror, dry_run, recursed):
     if not file_exists(sstat):
         qprint("Create {} on remote".format(dst_dir))
         if not dry_run:
-            if not make_dir(devs, dst_dir, dry_run, recursed):
+            if recursed and not make_dir(devs, dst_dir, dry_run, recursed):
                 eprint("*** Unable to create directory", dst_dir)
     elif not is_dir(sstat):
         eprint("*** Destination {} is not a directory".format(src_dir))
@@ -518,12 +526,13 @@ def rsync(devs, src_dir, dst_dir, mirror, dry_run, recursed):
     to_del = set_dst - set_src  # To delete from dest
     to_upd = set_dst.intersection(set_src) # In both: may need updating
 
-    dprint("Sync ...")
-    dprint("  sources", set_src)
-    dprint("  dest   ", set_dst)
-    dprint("  add    ", to_add)
-    dprint("  delete ", to_del)
-    dprint("  update ", to_upd)
+    if False:
+        eprint("rsync {} -> {}".format(src_dir, dst_dir))
+        eprint("  sources", set_src)
+        eprint("  dest   ", set_dst)
+        eprint("  add    ", to_add)
+        eprint("  delete ", to_del)
+        eprint("  update ", to_upd)
 
     # add ...
     for f in to_add:
@@ -531,10 +540,11 @@ def rsync(devs, src_dir, dst_dir, mirror, dry_run, recursed):
         dst = os.path.join(dst_dir, f)
         qprint("Adding {}".format(dst))
         if is_dir(d_src[f]):
-            rsync(devs, src, dst, mirror, dry_run, recursed)
+            if recursed:
+                rsync(devs, src, dst, mirror, dry_run, recursed)
         else:
             if not dry_run:
-                if not cp(src, dst):
+                if not cp(devs, src, dst):
                     eprint("*** Unable to add {} --> {}".format(src, dst))
 
     # delete ...
@@ -554,7 +564,8 @@ def rsync(devs, src_dir, dst_dir, mirror, dry_run, recursed):
         if is_dir(d_src[f]):
             if is_dir(d_dst[f]):
                 # src and dst are directories
-                rsync(devs, src, dst, mirror, dry_run, recursed)
+                if recursed:
+                    rsync(devs, src, dst, mirror, dry_run, recursed)
             else:
                 msg = "Source '{}' is a directory and destination " \
                       "'{}' is a file. Ignoring"
@@ -565,12 +576,13 @@ def rsync(devs, src_dir, dst_dir, mirror, dry_run, recursed):
                       "'{}' is a directory. Ignoring"
                 eprint(msg.format(src, dst))
             else:
-                if stat_mtime(d_src[f]) > stat_mtime(d_dst[f]):
+                if False:
+                    eprint("BEB src {} > dst {} delta={}".format(
+                        stat_mtime(d_src[f]), stat_mtime(d_dst[f]),
+                        stat_mtime(d_src[f]) -stat_mtime(d_dst[f])))
+                if stat_size(d_src[f]) != stat_size(d_dst[f]) or \
+                   stat_mtime(d_src[f]) > stat_mtime(d_dst[f]):
                     msg = "Copying {} (newer than {})"
-                    if True:
-                        eprint("BEB src {} > dst {} delta={}".format(
-                            stat_mtime(d_src[f]), stat_mtime(d_dst[f]),
-                            stat_mtime(d_src[f]) -stat_mtime(d_dst[f])))
                     qprint(msg.format(src, dst))
                     if not dry_run:
                         if not cp(devs, src, dst):
@@ -579,19 +591,25 @@ def rsync(devs, src_dir, dst_dir, mirror, dry_run, recursed):
                     dprint(f, "NO update src time:", stat_mtime(d_src[f]), "dst time", stat_mtime(d_dst[f]), "delta", stat_mtime(d_src[f])-stat_mtime(d_dst[f]))
 
 
-def set_time(rtc_time):
+def set_time(y, m, d, h, min, s):
+    """Set time on upy board."""
     rtc = None
     try:
         import pyb
         rtc = pyb.RTC()
-        rtc.datetime(rtc_time)
+        rtc.datetime((y, m, d, None, h, min, s))
         return rtc.datetime()
     except:
         try:
             import machine
             rtc = machine.RTC()
-            rtc.datetime(rtc_time)
-            return rtc.datetime()
+            if not rtc.synced():
+                try:
+                    rtc.datetime((y, m, d, None, h, min, s))
+                    return rtc.datetime()
+                except:
+                    rtc.init((y, m, d, h, min, s))
+                    return rtc.now()
         except:
             return None
 

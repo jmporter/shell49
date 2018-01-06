@@ -1,24 +1,25 @@
 from print_ import dprint, eprint, oprint, qprint, cprint
 from print_ import PROMPT_COLOR, END_COLOR, PY_COLOR, DIR_COLOR, OUTPUT_COLOR
 import print_
-import globals_
-from config import Config
+from config import Config, ConfigError
 from device import DeviceError
 from devs import DevsError
 from pyboard import PyboardError
 from remote_op import is_pattern, resolve_path, auto, get_mode, mode_isdir, \
     chdir, get_stat, stat_mode, mode_exists, listdir_stat, is_visible, \
     decorated_filename, print_cols, mode_isfile, cat, column_print, \
-    get_ip_address, get_mac_address, get_time, osdebug, get_filesize, \
+    get_ip_address, get_mac_address, get_time, set_time, osdebug, get_filesize, \
     cp, rsync, mkdir, rm, process_pattern, print_long, trim, unescape, \
-    listdir_matches, escape
+    listdir_matches, escape, validate_pattern
 from getch import getch
 
-from configparser import NoSectionError
+from datetime import datetime
+from tempfile import NamedTemporaryFile
 import argparse
 import cmd
 import sys
 import os
+import io
 import time
 import shutil
 import shlex
@@ -140,8 +141,8 @@ class Shell(cmd.Cmd):
         self.line_num = 0
         self.timing = timing
 
-        globals_.cur_dir = os.getcwd()
-        self.prev_dir = globals_.cur_dir
+        self.cur_dir = os.path.expanduser(config.get(0, 'host_dir', os.getcwd()))
+        self.prev_dir = self.cur_dir
         self.columns = shutil.get_terminal_size().columns
 
         self.redirect_dev = None
@@ -158,7 +159,7 @@ class Shell(cmd.Cmd):
 
     def set_prompt(self):
         if self.stdin == sys.stdin:
-            prompt = PROMPT_COLOR + globals_.cur_dir + END_COLOR + '> '
+            prompt = PROMPT_COLOR + self.cur_dir + END_COLOR + '> '
             if FAKE_INPUT_PROMPT:
                 print(prompt, end='')
                 self.prompt = ''
@@ -183,27 +184,31 @@ class Shell(cmd.Cmd):
         2 - So we can strip comments
         3 - So we can track line numbers
         """
-        dprint('Executing "%s"' % line)
-        self.line_num += 1
-        if line == "EOF":
-            if cmd.Cmd.use_rawinput:
-                # This means that we printed a prompt, and we'll want to
-                # print a newline to pretty things up for the caller.
-                self.print('')
-            return True
-        # Strip comments
-        comment_idx = line.find("#")
-        if comment_idx >= 0:
-            line = line[0:comment_idx]
-            line = line.strip()
+        try:
+            dprint('Executing "%s"' % line)
+            self.line_num += 1
+            if line == "EOF":
+                if cmd.Cmd.use_rawinput:
+                    # This means that we printed a prompt, and we'll want to
+                    # print a newline to pretty things up for the caller.
+                    self.print('')
+                return True
+            # Strip comments
+            comment_idx = line.find("#")
+            if comment_idx >= 0:
+                line = line[0:comment_idx]
+                line = line.strip()
 
-        # search multiple commands on the same line
-        lexer = shlex.shlex(line)
-        lexer.whitespace = ''
+            # search multiple commands on the same line
+            lexer = shlex.shlex(line)
+            lexer.whitespace = ''
 
-        for issemicolon, group in itertools.groupby(lexer, lambda x: x == ";"):
-            if not issemicolon:
-                self.onecmd_exec("".join(group))
+            for issemicolon, group in itertools.groupby(lexer, lambda x: x == ";"):
+                if not issemicolon:
+                    self.onecmd_exec("".join(group))
+        except:
+            eprint("*** Uncaught exception")
+            traceback.print_exc(file=sys.stdout)
 
     def onecmd_exec(self, line):
         try:
@@ -393,7 +398,7 @@ class Shell(cmd.Cmd):
         if redirect_index >= 0:
             if redirect_index + 1 >= len(args):
                 raise ShellError("> requires a filename")
-            self.redirect_filename = resolve_path(args[redirect_index + 1])
+            self.redirect_filename = resolve_path(self.cur_dir, args[redirect_index + 1])
             rmode = auto(self.devs, self.devs, get_mode, os.path.dirname(self.redirect_filename))
             if not mode_isdir(rmode):
                 raise ShellError("Unable to redirect to '%s', directory doesn't exist" %
@@ -404,7 +409,7 @@ class Shell(cmd.Cmd):
             else:
                 self.redirect_mode = 'a'
                 dprint('Redirecting (append) to', self.redirect_filename)
-            self.redirect_dev, self.redirect_filename = get_dev_and_path(self.redirect_filename)
+            self.redirect_dev, self.redirect_filename = self.devs.get_dev_and_path(self.redirect_filename)
             try:
                 if self.redirect_dev is None:
                     self.stdout = SmartFile(open(self.redirect_filename, self.redirect_mode))
@@ -447,14 +452,17 @@ class Shell(cmd.Cmd):
         rows = []
         rows.append(("ID", "Name", "Port/IP", "Status", "Dirs"))
         for index, dev in enumerate(self.devs.devices()):
+            name = dev.name()
+            if not name: name = '-'
             if dev is self.devs.default_device():
                 dirs = [dir[:-1] for dir in dev.root_directories()]
             else:
                 dirs = []
-            dirs += ['/{}{}'.format(dev.name(), dir)[:-1] for dir in dev.root_directories()]
+            if dev.name():
+                dirs += ['/{}{}'.format(name, dir)[:-1] for dir in dev.root_directories()]
             dirs = ', '.join(dirs)
             default = '*' if dev is self.devs.default_device() else ''
-            rows.append((default+str(index+1), dev.name(), dev.address(), dev.status(), dirs))
+            rows.append((default+str(index+1), name, dev.address(), dev.status(), dirs))
         if len(rows) > 1:
             column_print('><<< ', rows, self.print)
         else:
@@ -462,6 +470,13 @@ class Shell(cmd.Cmd):
 
 
     argparse_config = (
+        add_arg(
+            '-u', '--upload',
+            dest='upload',
+            action='store_true',
+            help='upload configuration to board',
+            default=False
+        ),
         add_arg(
             '-d', '--delete',
             dest='delete',
@@ -493,20 +508,50 @@ class Shell(cmd.Cmd):
 
     def do_config(self, line):
         """config                                   Print option values of default board.
-       config [-d] [--default] OPTION [VALUE]   Get/set OPTION of default board to VALUE.
+       config [-u] [-d] [--default] OPTION [VALUE]   Get/set OPTION of default board to VALUE.
         """
+        def_dev = self.devs.default_device()
+        # no arguments ... just print configuration of current default device
         if line == '':
-            for (k, v) in self.devs.default_device().options():
-                color = DIR_COLOR if self.config.is_default_option(k, v) else OUTPUT_COLOR
-                cprint("{:>20s} = {}".format(k, v), color=color)
+            keys = def_dev.options()
+            if not 'name' in keys:
+                eprint("WARNING: board has no 'name' attribute. Assign with 'config -u name ...'.")
+            for k in keys:
+                v = def_dev.get(k)
+                cprint("{:>20s} = {}".format(k, v), color=DIR_COLOR)
+            oprint("Defaults:")
+            for k in self.config.options(0):
+                if not k in keys:
+                    v = self.config.get(0, k)
+                    cprint("{:>20s} = {}".format(k, v), color=OUTPUT_COLOR)
             return
+        # parse arguments
         args = self.line_to_args(line)
-        section = 'DEFAULT' if args.default else self.devs.default_device().get_id()
+        value = ' '.join(args.value)
+        try:
+            value = eval(value)
+        except:
+            pass
+        section = 0 if args.default else def_dev.get_id()
         if args.delete:
-            if args.option:
-                self.config.remove_option(section, args.option)
+            self.config.remove(section, args.option)
         else:
-            self.config.set(section, args.option, ' '.join(args.value))
+            try:
+                self.config.set(section, args.option, value)
+            except ConfigError as e:
+                eprint("*** {}".format(e))
+        if args.upload:
+            with NamedTemporaryFile() as temp:
+                temp.close()
+                f = open(temp.name, 'w')
+                print("temp.name", temp.name)
+                now = datetime.now().strftime("%Y-%b-%d %H:%M:%S")
+                print("# config.py, created on {}".format(now), file=f)
+                for key in def_dev.options():
+                    print("{} = {}".format(key, repr(def_dev.get(key))), file=f)
+                f.close()
+                dst = os.path.join(def_dev.get('remote_dir', '/flash'), 'config.py')
+                cp(self.devs, temp.name, dst)
 
 
     def do_flash(self):
@@ -528,7 +573,7 @@ class Shell(cmd.Cmd):
         #       since we need to know the filesize when copying to the pyboard.
         args = self.line_to_args(line)
         for filename in args:
-            filename = resolve_path(filename)
+            filename = resolve_path(self.cur_dir, filename)
             mode = auto(self.devs, get_mode, filename)
             if not mode_exists(mode):
                 eprint("Cannot access '%s': No such file" % filename)
@@ -557,12 +602,12 @@ class Shell(cmd.Cmd):
                 dirname = self.prev_dir
             else:
                 dirname = args[0]
-        dirname = resolve_path(dirname)
+        dirname = resolve_path(self.cur_dir, dirname)
 
         mode = auto(self.devs, get_mode, dirname)
         if mode_isdir(mode):
-            self.prev_dir = globals_.cur_dir
-            globals_.cur_dir = dirname
+            self.prev_dir = self.cur_dir
+            self.cur_dir = dirname
             auto(self.devs, chdir, dirname)
         else:
             eprint("Directory '%s' does not exist" % dirname)
@@ -600,7 +645,7 @@ class Shell(cmd.Cmd):
                 eprint('Missing hostname or ip-address')
                 return
             name = args[1]
-            self.defs.connect_telnet(name)
+            self.devs.connect_telnet(name)
         else:
             eprint('Unrecognized connection TYPE: {}'.format(connect_type))
 
@@ -624,7 +669,7 @@ class Shell(cmd.Cmd):
         if len(args.filenames) < 2:
             eprint('Missing destination file')
             return
-        dst_dirname = resolve_path(args.filenames[-1])
+        dst_dirname = resolve_path(self.cur_dir, args.filenames[-1])
         dst_mode = auto(self.devs, get_mode, dst_dirname)
         d_dst = {}  # Destination directory: lookup stat by basename
         if args.recursive:
@@ -644,7 +689,7 @@ class Shell(cmd.Cmd):
             if len(src_filenames) > 1:
                 eprint("Usage: cp [-r] PATTERN DIRECTORY")
                 return
-            src_filenames = process_pattern(sfn)
+            src_filenames = process_pattern(self.devs, self.cur_dir, sfn)
             if src_filenames is None:
                 return
 
@@ -652,7 +697,7 @@ class Shell(cmd.Cmd):
             if is_pattern(src_filename):
                 eprint("Only one pattern permitted.")
                 return
-            src_filename = resolve_path(src_filename)
+            src_filename = resolve_path(self.cur_dir, src_filename)
             src_mode = auto(self.devs, get_mode, src_filename)
             if not mode_exists(src_mode):
                 eprint("File '{}' doesn't exist".format(src_filename))
@@ -717,8 +762,8 @@ class Shell(cmd.Cmd):
         if len(line) == 0:
             eprint("Must provide a filename")
             return
-        filename = resolve_path(line)
-        dev, dev_filename = get_dev_and_path(filename)
+        filename = resolve_path(self.cur_dir, line)
+        dev, dev_filename = self.devs.get_dev_and_path(filename)
         mode = auto(self.devs, get_mode, filename)
         if mode_exists(mode) and mode_isdir(mode):
             eprint("Unable to edit directory '{}'".format(filename))
@@ -754,7 +799,7 @@ class Shell(cmd.Cmd):
         if len(line) == 0:
             eprint("Must provide a filename")
             return
-        filename = resolve_path(line)
+        filename = resolve_path(self.cur_dir, line)
         self.print(auto(self.devs, get_filesize, filename))
 
 
@@ -771,7 +816,7 @@ class Shell(cmd.Cmd):
         if len(line) == 0:
             eprint("Must provide a filename")
             return
-        filename = resolve_path(line)
+        filename = resolve_path(self.cur_dir, line)
         mode = auto(self.devs, get_mode, filename)
         if mode_exists(mode):
             if mode_isdir(mode):
@@ -860,7 +905,7 @@ class Shell(cmd.Cmd):
             args.filenames = ['.']
         for idx, fn in enumerate(args.filenames):
             if not is_pattern(fn):
-                filename = resolve_path(fn)
+                filename = resolve_path(self.cur_dir, fn)
                 stat = auto(self.devs, get_stat, filename)
                 mode = stat_mode(stat)
                 if not mode_exists(mode):
@@ -879,7 +924,7 @@ class Shell(cmd.Cmd):
                     self.print("%s:" % filename)
                 pattern = '*'
             else: # A pattern was specified
-                filename, pattern = validate_pattern(fn)
+                filename, pattern = validate_pattern(self.devs, self.cur_dir, fn)
                 if filename is None: # An error was printed
                     continue
             files = []
@@ -911,7 +956,7 @@ class Shell(cmd.Cmd):
         """
         args = self.line_to_args(line)
         for filename in args:
-            filename = resolve_path(filename)
+            filename = resolve_path(self.cur_dir, filename)
             if not mkdir(self.devs, filename):
                 eprint('Unable to create %s' % filename)
 
@@ -1102,12 +1147,12 @@ class Shell(cmd.Cmd):
             if len(filenames) > 1:
                 eprint("Usage: rm [-r] [-f] PATTERN")
                 return
-            filenames = process_pattern(sfn)
+            filenames = process_pattern(self.devs, self.cur_dir, sfn)
             if filenames is None:
                 return
 
         for filename in filenames:
-            filename = resolve_path(filename)
+            filename = resolve_path(self.cur_dir, filename)
             if not rm(self.devs, filename, recursive=args.recursive, force=args.force):
                 if not args.force:
                     eprint("Unable to remove '{}'".format(filename))
@@ -1158,8 +1203,9 @@ class Shell(cmd.Cmd):
 
            Synchronizes a destination directory tree with a source directory tree.
         """
-        host_dir = self.devs.get('host_dir', '~/iot49')
-        remote_dir = self.devs.get('remote_dir', '/flash')
+        dd = self.devs.default_device()
+        host_dir = dd.get('host_dir', '~/iot49')
+        remote_dir = dd.get('remote_dir', '/flash')
         args = self.line_to_args(line)
         sd = args.src_dst_dir
         if len(sd) > 2:
@@ -1167,12 +1213,12 @@ class Shell(cmd.Cmd):
             return
         src_dir = sd[0] if len(sd) > 0 else host_dir
         dst_dir = sd[1] if len(sd) > 1 else remote_dir
-        src_dir = resolve_path(src_dir)
-        dst_dir = resolve_path(dst_dir)
+        src_dir = resolve_path(self.cur_dir, src_dir)
+        dst_dir = resolve_path(self.cur_dir, dst_dir)
         if len(sd) < 2:
             qprint("synchronizing {} --> {}".format(src_dir, dst_dir))
         rsync(self.devs, src_dir, dst_dir,
-            mirror=args.mirror, dry_run=args.dry_run, recursed=False)
+            mirror=args.mirror, dry_run=args.dry_run, recursed=True)
 
 
     def do_run(self, line):
@@ -1213,8 +1259,8 @@ class Shell(cmd.Cmd):
         """
         if 'now' in line:
             now = time.localtime(time.time())
-            self.devs.default_device().remote(set_time, (now.tm_year, now.tm_mon, now.tm_mday,
-                                   now.tm_hour, now.tm_min, now.tm_sec))
+            self.devs.default_device().remote(set_time, now.tm_year, now.tm_mon, now.tm_mday,
+                                   now.tm_hour, now.tm_min, now.tm_sec)
         oprint(self.devs.default_device().remote(get_time).decode('utf-8'), end='')
 
 
@@ -1248,7 +1294,7 @@ class Shell(cmd.Cmd):
     def do_debug(self, line):
         """debug [on|off]
 
-        Turn rshell on/off debug output.
+        Turn debug output on/off.
         """
         print_.DEBUG = 'on' in line
         oprint("Debug is {}".format('on' if print_.DEBUG else 'off'))
@@ -1261,19 +1307,3 @@ class Shell(cmd.Cmd):
         """
         print_.QUIET = 'on' in line
         oprint("Quiet is {}".format('on' if print_.QUIET else 'off'))
-
-
-    def do_quit(self, line):
-        """quit
-
-        Quit rshell. Same as Control-D, Control-C, or exit.
-        """
-        raise KeyboardInterrupt
-
-
-    def do_exit(self, line):
-        """exit
-
-        Exit rshell. Same as Control-D, Control-C, or quit.
-        """
-        raise KeyboardInterrupt
