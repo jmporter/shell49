@@ -8,61 +8,29 @@ raw-REPL to send python snippets to the pyboard in order to get
 filesystem information, and to copy files to and from MicroPython's
 filesystem.
 
-It also has the ability to invoke the regular REPL, so rshell can be
-used as a terminal emulator as well.
-
-Note: With rshell you can disable USB Mass Storage and still copy files
-into and out of your pyboard.
-
-When using the commands, the /flash directory, and the /sdcard directory
-(if an sdcard is inserted) are considered to be on the pyboard, and all
-other directories are considered to be on the host.
-
-NOTE: rshell requires a fairly recent version of the MicroPython
-firmware, specifically one which contains the ubinascii.unhexlify
-command which was added May 19, 2015 (v1.4.3-28-ga3a14b9 or newer).
-
-If your verion of the firmware isn't new enough, then you'll see an
-error message something like this:
-
-::
-
-    >./rshell.py
-    rshell needs MicroPython firmware with ubinascii.unhexlify
 
 Installation
 ============
 
-To install this version of rshell:
-    download the code from github and run
-	# only if another version of rshell is installed already
-	pip3 uninstall rshell
-	python setup.py install
-	
-To get up-to-date help:
-    from shell:
-        rshell -h    # program options and their defaults
-	from rshell:
-	    help all
-	
-	
-The instructions below install the "official" version of rshell without
-the "run" command and other changes (not all of which you may like).
-
-You can install the "Dave Hylands's" rshell using the command:
+Install with pip or pip3, depending on your setup:
 
 ::
 
-    sudo pip3 install rshell
+    sudo pip3 install shell49
 
-If you use a virtualenv, then you don't need the sudo. rshell needs Python3.
-All of my testing was done using version 3.4.0.
+If you use a virtualenv, then you don't need the sudo. shell49 needs Python 3.
+All of my testing was done using version 3.6.3.
 
 Debian/Ubuntu users can get pip3 using:
 
 ::
 
     sudo apt-get install python3-pip
+
+Source Repository
+=================
+
+https://github.com/bboser/shell49
 
 Sample Session
 ==============
@@ -93,11 +61,11 @@ entering the repl and importing it.
 
     Micro Python v1.4.3-28-ga3a14b9 on 2015-05-21; PYBv1.0 with STM32F405RG
     Type "help()" for more information.
-    >>> 
+    >>>
     >>> import hello
     Hello World
-    >>> 
-    /home/dhylands/Dropbox/micropython/rshell> 
+    >>>
+    /home/dhylands/Dropbox/micropython/rshell>
 
 Command Line Options
 ====================
@@ -346,7 +314,7 @@ Directories will only be copied if -r is specified.
 
 A single pattern may be specified, in which case the destination
 should be a directory. Pattern matching is performed according to a subset
-of the Unix rules (see below). 
+of the Unix rules (see below).
 
 Recursive copying uses rsync (see below): where a file exists on source
 and destination, it will only be copied if the source is newer than the
@@ -428,7 +396,7 @@ ls
       -l, --long  use a long listing format
 
 Pattern matching is performed according to a subset of the Unix rules
-(see below). 
+(see below).
 
 mkdir
 -----
@@ -533,10 +501,10 @@ run
 ::
 
     usage: run [FILE]
-	
+
 	Sends FILE to micropython board for execution.
 	Same effect as typing contents of FILE at REPL prompt.
-	
+
 	If FILE is omitted, uses the last value given.
 
 shell

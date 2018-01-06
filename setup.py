@@ -1,4 +1,4 @@
-from distutils.core import setup
+from setuptools import setup
 import os, sys
 
 if sys.version_info < (3,4):
@@ -7,21 +7,22 @@ if sys.version_info < (3,4):
 
 from shell49.version import __version__
 
-here = os.path.abspath(os.path.dirname(__file__))
-with open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
-    long_description = f.read()
+if False:
+    here = os.path.abspath(os.path.dirname(__file__))
+    with open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
+        long_description = f.read()
 
 setup(
   name = 'shell49',
-  packages = ['shell49', 'tests'],
-  version = '0.1',
+  packages = ['shell49'],
+  version = __version__,
   description = 'Micropython remote shell',
   license = 'MIT',
   author = 'Bernhard Boser',
   author_email = 'boser@berkeley.edu',
-  url = 'https://github.com/bboser/shell49', # use the URL to the github repo
-  download_url = 'https://github.com/bboser/shell49/archive/0.1.tar.gz', # I'll explain this in a second
-  keywords = ['micropython', 'shell', 'rshell'], # arbitrary keywords
+  url = 'https://github.com/bboser/shell49',
+  download_url = 'https://github.com/bboser/shell49/archive/0.1.tar.gz',
+  keywords = ['micropython', 'shell', 'shell49'], 
   classifiers = [
       'Development Status :: 3 - Alpha',
       'Environment :: Console',
