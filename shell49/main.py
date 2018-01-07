@@ -10,7 +10,7 @@ from . config import Config
 from . shell import Shell
 from . devs import Devs
 from . device import DeviceError
-from . print_ import oprint, qprint, eprint, dprint, cprint
+from . print_ import oprint, qprint, eprint, dprint, cprint, nocolor
 import shell49.print_
 
 import os
@@ -98,7 +98,7 @@ Environment variables:
 
     shell49.print_.DEBUG = args.debug
     shell49.print_.QUIET = args.quiet
-    if args.nocolor: print.nocolor()
+    if args.nocolor: nocolor()
 
     dprint("debug = %s" % args.debug)
     dprint("quiet = %d" % args.quiet)
