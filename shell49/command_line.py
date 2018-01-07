@@ -1,4 +1,4 @@
-import shell49.main
+from . main import main
 
 def main():
-    shell49.main.main()
+    main()

@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-from print_ import cprint, qprint, eprint
+from . print_ import cprint, qprint, eprint
 
 from pprint import pprint
 from datetime import datetime
@@ -97,15 +97,16 @@ class Config:
         self._config = { 'boards': [
                 {
                     'baudrate': 115200,
-                    'buffer_size': 512,
+                    'buffer_size': 1024,
                     'binary_transfer': True,
-                    'time_offset': 946684800,
+                    'time_offset': 0,  # 946684800,
                     'user': 'micro',
                     'password': 'python',
                     'host_dir': '~/iot49',
                     'remote_dir': '/flash',
                     'rsync_includes': '*.py,*.json,*.txt,*.html',
-                    'rsync_excludes': '.*,__*__,config.py'
+                    'rsync_excludes': '.*,__*__,config.py',
+                    'port': '/dev/cu.SLAB_USBtoUART'
                 }
             ]}
 

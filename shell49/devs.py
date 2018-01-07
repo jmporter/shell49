@@ -1,9 +1,8 @@
-from device import DeviceSerial, DeviceNet, DeviceError
-from config import Config
-from print_ import oprint, qprint, eprint, dprint
+from . device import DeviceSerial, DeviceNet, DeviceError
+from . config import Config
+from . print_ import oprint, qprint, eprint, dprint
 
 from collections import OrderedDict
-import threading
 
 
 class DevsError(Exception):
@@ -48,10 +47,25 @@ class Devs:
         return self._default_dev
 
 
+    def is_connected(self, name):
+        """Return True if board with specified name is already connected."""
+        for d in self._devices:
+            if d.name == name: return Trie
+        return False
+
+
     def find_serial_device_by_port(self, port):
         """Find board by port name."""
         for dev in self._devices:
             if dev.is_serial_port(port):
+                return dev
+        return None
+
+
+    def find_telnet_device_by_ip(self, ip):
+        """Find board by ip address."""
+        for dev in self._devices:
+            if dev.is_telnet_ip(ip):
                 return dev
         return None
 

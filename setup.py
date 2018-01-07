@@ -2,7 +2,7 @@ from setuptools import setup
 import os, sys
 
 if sys.version_info < (3,4):
-    print('rshell requires Python 3.4 or newer.')
+    print('shell49 requires Python 3.4 or newer.')
     sys.exit(1)
 
 from shell49.version import __version__
@@ -17,12 +17,12 @@ setup(
   packages = ['shell49'],
   version = __version__,
   description = 'Micropython remote shell',
+  long_description = 'see https://github.com/bboser/shell49',
   license = 'MIT',
   author = 'Bernhard Boser',
   author_email = 'boser@berkeley.edu',
   url = 'https://github.com/bboser/shell49',
-  download_url = 'https://github.com/bboser/shell49/archive/0.1.tar.gz',
-  keywords = ['micropython', 'shell', 'shell49'], 
+  keywords = ['micropython', 'shell', 'shell49'],
   classifiers = [
       'Development Status :: 3 - Alpha',
       'Environment :: Console',
@@ -40,7 +40,7 @@ setup(
   install_requires=[
       'pyserial >= 2.0',
       'esptool >= 2.1',
-      'zeroconf >= 0.19'
+      # 'zeroconf >= 0.19'
   ],
   entry_points = {
       'console_scripts': [

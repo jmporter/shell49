@@ -1,17 +1,19 @@
-from print_ import dprint, eprint, oprint, qprint, cprint
-from print_ import PROMPT_COLOR, END_COLOR, PY_COLOR, DIR_COLOR, OUTPUT_COLOR
-import print_
-from config import Config, ConfigError
-from device import DeviceError
-from devs import DevsError
-from pyboard import PyboardError
-from remote_op import is_pattern, resolve_path, auto, get_mode, mode_isdir, \
+from . print_ import dprint, eprint, oprint, qprint, cprint
+from . print_ import PROMPT_COLOR, END_COLOR, PY_COLOR, DIR_COLOR, OUTPUT_COLOR, LT_BLUE
+import shell49.print_
+from . config import Config, ConfigError
+from . device import DeviceError
+from . devs import DevsError
+from . pyboard import PyboardError
+from . remote_op import is_pattern, resolve_path, auto, get_mode, mode_isdir, \
     chdir, get_stat, stat_mode, mode_exists, listdir_stat, is_visible, \
     decorated_filename, print_cols, mode_isfile, cat, column_print, \
     get_ip_address, get_mac_address, get_time, set_time, osdebug, get_filesize, \
     cp, rsync, mkdir, rm, process_pattern, print_long, trim, unescape, \
     listdir_matches, escape, validate_pattern
-from getch import getch
+from . getch import getch
+from . mdns_client import MdnsListenter
+from . flasher import LoborisFlasher
 
 from datetime import datetime
 from tempfile import NamedTemporaryFile
@@ -206,6 +208,8 @@ class Shell(cmd.Cmd):
             for issemicolon, group in itertools.groupby(lexer, lambda x: x == ";"):
                 if not issemicolon:
                     self.onecmd_exec("".join(group))
+        except KeyboardInterrupt:
+            pass
         except:
             eprint("*** Uncaught exception")
             traceback.print_exc(file=sys.stdout)
@@ -337,10 +341,10 @@ class Shell(cmd.Cmd):
         # is / and the path being entered is relative.
         if match[0] == '/':
             abs_match = match
-        elif cur_dir == '/':
-            abs_match = cur_dir + match
+        elif self.cur_dir == '/':
+            abs_match = self.cur_dir + match
         else:
-            abs_match = cur_dir + '/' + match
+            abs_match = self.cur_dir + '/' + match
 
         completions = []
         prepend = ''
@@ -440,13 +444,24 @@ class Shell(cmd.Cmd):
             self.print("arg[%d] = '%s'" % (idx, args[idx]))
 
 
+    def do_mdns(self, line):
+        """mdns
+
+        List all MicroPython boards advertising repl telnet via mdns.
+        """
+        listener = MdnsListenter()
+        cprint("url                  ip               port   spec", color=LT_BLUE)
+        for b in listener.listen(seconds=1):
+            oprint("{:20s} {:14s}    {:2d}    {}".format(b.url, b.ip, b.port, b.spec))
+
+
     def do_boards(self, line):
         """boards          List connected devices.
         boards ID       Make board ID the default board.
         boards NAME     Make board NAME the default board.
         """
         try:
-            self.devs.default_device(id=int(line))
+            self.devs.default_device(index=int(line))
         except ValueError:
             self.devs.default_device(name=line)
         rows = []
@@ -544,7 +559,6 @@ class Shell(cmd.Cmd):
             with NamedTemporaryFile() as temp:
                 temp.close()
                 f = open(temp.name, 'w')
-                print("temp.name", temp.name)
                 now = datetime.now().strftime("%Y-%b-%d %H:%M:%S")
                 print("# config.py, created on {}".format(now), file=f)
                 for key in def_dev.options():
@@ -552,11 +566,44 @@ class Shell(cmd.Cmd):
                 f.close()
                 dst = os.path.join(def_dev.get('remote_dir', '/flash'), 'config.py')
                 cp(self.devs, temp.name, dst)
+                os.unlink(temp.name)
 
 
-    def do_flash(self):
-        """flash"""
-        raise Exception("Implement shell.do_flash!")
+    argparse_flash = (
+        add_arg(
+            '-e', '--erase',
+            dest='erase',
+            action='store_true',
+            help='erase flash memory (including file system) before flashing firmware',
+            default=False
+        ),
+        add_arg(
+            '--version',
+            dest='version',
+            help='firmware version',
+            default='latest'
+        ),
+        add_arg(
+            '--versions',
+            dest='versions',
+            action='store_true',
+            help='list firmware versions (no flashing)',
+            default=False
+        ),
+    )
+
+
+    def do_flash(self, line):
+        """flash [--versions] [-e | --erase] [--version VERSION]"""
+        args = self.line_to_args(line)
+        flasher = LoborisFlasher()
+        if args.versions:
+            for v in flasher.versions():
+                oprint(v)
+            return
+        if args.erase:
+            flasher.erase_flash()
+        flasher.flash(version=args.version)
 
 
     def complete_cat(self, text, line, begidx, endidx):
@@ -614,11 +661,14 @@ class Shell(cmd.Cmd):
 
 
     def do_connect(self, line):
-        """connect TYPE TYPE_PARAMS
-           connect serial port [baud]
-           connect telnet ip-address-or-name
+        """connect TYPE TYPE_PARAMS       Connect boards to shell49.
+        connect serial [port [baud]]   Serial connection. Uses defaults from config file.
+        connect telnet [url]           Wireless connection. If no url/ip address is
+                                       specified, connects to all known boards advertising
+                                       repl service via mDNS.
 
-           Connects a pyboard to shell49.
+        Note: do not connect to the same board via serial AND telnet connections.
+              Doing so may block communication with the board.
         """
         args = self.line_to_args(line)
         num_args = len(args)
@@ -627,25 +677,28 @@ class Shell(cmd.Cmd):
             return
         connect_type = args[0]
         if connect_type == 'serial':
-            if num_args < 2:
-                eprint('Missing serial port')
+            port = args[1] if num_args > 1 else self.config.get(0, 'port', '/dev/cu.SLAB_USBtoUART')
+            baud = args[2] if num_args > 2 else self.config.get(0, 'baudrate', 115200)
+            # Note: board may be connected over telnet, but we don't know ...
+            #       in this case, connect blocks
+            if self.devs.find_serial_device_by_port(port):
+                eprint("board already connected on '{}'".format(port))
                 return
-            port = args[1]
-            if num_args < 3:
-                baud = 115200
-            else:
-                try:
-                    baud = int(args[2])
-                except ValueError:
-                    eprint("Expecting baud to be numeric. Found '{}'".format(args[2]))
-                    return
-            self.devs.connect_serial(port, baud)
+            self.devs.connect_serial(port)
         elif connect_type == 'telnet':
-            if num_args < 2:
-                eprint('Missing hostname or ip-address')
-                return
-            name = args[1]
-            self.devs.connect_telnet(name)
+            if num_args > 1:
+                self.devs.connect_telnet(name)
+            else:
+                listener = MdnsListenter()
+                for b in listener.listen(seconds=1):
+                    # connect only to boards in the config database
+                    if self.config.find_board_by_name(b.hostname) == 0:
+                        continue
+                    # we are not already connected to
+                    if self.devs.is_connected(b.hostname):
+                        continue
+                    # let's connect!
+                    self.devs.connect_telnet(b.url)
         else:
             eprint('Unrecognized connection TYPE: {}'.format(connect_type))
 
@@ -962,8 +1015,8 @@ class Shell(cmd.Cmd):
 
 
     def repl_serial_to_stdout(self, dev):
-        """Runs as a thread which has a sole purpose of readding bytes from
-           the seril port and writing them to stdout. Used by do_repl.
+        """Runs as a thread which has a sole purpose of reading bytes from
+           the serial port and writing them to stdout. Used by do_repl.
         """
         with self.serial_reader_running:
             try:
@@ -979,7 +1032,7 @@ class Shell(cmd.Cmd):
                         # goes away.
                         return
                     except TypeError:
-                        # These is a bug in serialposix.py starting with python 3.3
+                        # There is a bug in serialposix.py starting with python 3.3
                         # which causes a TypeError during the handling of the
                         # select.error. So we treat this the same as
                         # serial.serialutil.SerialException:
@@ -1004,12 +1057,13 @@ class Shell(cmd.Cmd):
     def do_repl(self, line):
         """repl [board-name] [~ line [~]]
 
-           Enters into the regular REPL with the MicroPython board.
-           Use Control-X to exit REPL mode and return the shell. It may take
-           a second or two before the REPL exits.
+           Enters into the regular REPL (read-eval-print-loop) with the
+           MicroPython board.
+           Use Control-X to exit REPL mode and return the shell.
+           It may take a couple of seconds before the REPL exits.
 
-           If you prvide a line to the repl command, then that will be executed.
-           If you want the repl to exit, end the line with the ~ character.
+           If you provide a line to the repl command, then that will be executed.
+           If you want the REPL to exit, end the line with the ~ character.
         """
         args = self.line_to_args(line)
         if len(args) > 0 and line[0] != '~':
@@ -1066,7 +1120,7 @@ class Shell(cmd.Cmd):
                         # means we'd need to wait for another character.
                         time.sleep(0.5)
                         # Print a newline so that the shell49 prompt looks good.
-                        self.print('')
+                        self.print(PY_COLOR)
                         # We stay in the loop so that we can still enter
                         # characters until we detect the reader thread quitting
                         # (mostly to cover off weird states).
@@ -1201,7 +1255,7 @@ class Shell(cmd.Cmd):
     def do_rsync(self, line):
         """rsync [-m|--mirror] [-n|--dry-run] [SRC_DIR [DEST_DIR]]
 
-           Synchronizes a destination directory tree with a source directory tree.
+           Synchronize destination directory tree to source directory tree.
         """
         dd = self.devs.default_device()
         host_dir = dd.get('host_dir', '~/iot49')
@@ -1296,8 +1350,8 @@ class Shell(cmd.Cmd):
 
         Turn debug output on/off.
         """
-        print_.DEBUG = 'on' in line
-        oprint("Debug is {}".format('on' if print_.DEBUG else 'off'))
+        shell49.print_.DEBUG = 'on' in line
+        oprint("Debug is {}".format('on' if shell49.print_.DEBUG else 'off'))
 
 
     def do_quiet(self, line):
@@ -1305,5 +1359,5 @@ class Shell(cmd.Cmd):
 
         Turn on/off verbose output.
         """
-        print_.QUIET = 'on' in line
-        oprint("Quiet is {}".format('on' if print_.QUIET else 'off'))
+        shell49.print_.QUIET = 'on' in line
+        oprint("Quiet is {}".format('on' if shell49.print_.QUIET else 'off'))

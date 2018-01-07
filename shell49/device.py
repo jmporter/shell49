@@ -1,8 +1,8 @@
-from print_ import qprint, dprint, eprint
-from pyboard import Pyboard, PyboardError
-from remote_op import listdir, remote_repr, set_time, epoch, \
+from . print_ import qprint, dprint, eprint
+from . pyboard import Pyboard, PyboardError
+from . remote_op import listdir, remote_repr, set_time, epoch, \
     osdebug, board_name, test_buffer
-import remote_op
+import shell49.remote_op
 
 import inspect
 import time
@@ -23,10 +23,12 @@ class Device(object):
         self.has_buffer = False  # needs to be set for remote_eval to work
         self.id = config.find_board_by_name(default_name)
 
+
     def _set_pyb(self, pyb, default_name):
         self.pyb = pyb
         # try to retrieve the current name from the board
         name = self.remote_eval(board_name, default_name)
+        qprint("set_pyb name = {}".format(name))
         # update id to match true board name
         self.id = self.config.find_board_by_name(name, create=True)
         self.has_buffer = self.remote_eval(test_buffer)
@@ -104,6 +106,10 @@ class Device(object):
         return False
 
 
+    def is_telnet_ip(self, ip):
+        return False
+
+
     def is_telnet(self):
         return False
 
@@ -125,7 +131,7 @@ class Device(object):
         # buffer_size must be consistent between remote and local methods
         # e.g. for recv_file_from_host &  send_file_to_remote
         buffer_size = self.get('buffer_size', default=128)
-        remote_op.BUFFER_SIZE = buffer_size
+        shell49.remote_op.BUFFER_SIZE = buffer_size
         has_buffer = self.has_buffer
         args_arr = [remote_repr(i) for i in args]
         kwargs_arr = ["{}={}".format(k, remote_repr(v)) for k, v in kwargs.items()]
@@ -309,14 +315,15 @@ class DeviceSerial(Device):
 
 class DeviceNet(Device):
 
-    def __init__(self, ip_address, config, name=None):
+    def __init__(self, url, config, name=None):
         super().__init__(config, name)
-        self.ip_address = ip_address
+        self.url = url
+        self.ip_address = socket.gethostbyname(url)
         user = self.get('user', default='micro')
         password = self.get('password', default='python')
 
         try:
-            pyb = Pyboard(ip=ip_address, user=user, password=password)
+            pyb = Pyboard(ip=url, user=user, password=password)
         except (socket.timeout, OSError):
             raise DeviceError('No response from {}'.format(ip_address))
         except KeyboardInterrupt:
@@ -333,3 +340,6 @@ class DeviceNet(Device):
 
     def is_telnet(self):
         return True
+
+    def is_telnet_ip(self, ip):
+        return ip == self.ip_address or ip == self.url

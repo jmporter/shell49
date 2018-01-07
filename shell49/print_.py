@@ -85,12 +85,12 @@ def oprint(*a, **kw):
 
 def eprint(*a, **kw):
     """Same as print, but prints to stder and sets color to ERR_COLOR."""
-    if a and isinstance(a, str) and len(a) > 0:
+    a = list(a)
+    if a and len(a) > 0 and isinstance(a[0], str):
         if not a[0].startswith('*'):
             a = list(a)
             a[0] = "*** " + a[0]
-    cprint(*a, color=ERR_COLOR, file=sys.stderr, **kw)
-    sys.stderr.flush()
+    cprint(*a, color=ERR_COLOR, **kw)
 
 def dprint(*a, **kw):
     """Debug messages"""

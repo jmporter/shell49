@@ -7,14 +7,15 @@
 """
 
 import sys
-sys.path.append('shell49')
+print("path = ", sys.path)
+# sys.path.append('shell49')
 
-from config import Config
-from shell import Shell
-from devs import Devs
-from device import DeviceError
-from print_ import oprint, qprint, eprint, dprint
-import print_
+from . config import Config
+from . shell import Shell
+from . devs import Devs
+from . device import DeviceError
+from . print_ import oprint, qprint, eprint, dprint, cprint
+import shell49.print_
 
 import os
 import argparse
@@ -98,8 +99,8 @@ Environment variables:
     )
     args = parser.parse_args(sys.argv[1:])
 
-    print_.DEBUG = args.debug
-    print_.QUIET = args.quiet
+    shell49.print_.DEBUG = args.debug
+    shell49.print_.QUIET = args.quiet
     if args.nocolor: print.nocolor()
 
     dprint("debug = %s" % args.debug)
@@ -116,8 +117,8 @@ Environment variables:
         devs = Devs(config)
 
         try:
-            pass
-            devs.connect_serial('/dev/cu.SLAB_USBtoUART')
+            if config.get(0, 'auto_connect', True):
+                devs.connect_serial(config.get(0, 'port', '/dev/cu.SLAB_USBtoUART'))
         except DeviceError as err:
             eprint(err)
             autoscan()
@@ -131,9 +132,7 @@ Environment variables:
             if cmd_line == '':
                 oprint("Welcome to shell49. Type 'help' for information; Control-D to exit.\n")
             if devs.num_devices() == 0:
-                print('')
-                eprint('No MicroPython boards connected - use the connect command to add one')
-                print('')
+                eprint('No MicroPython boards connected - use the connect command to add one.\n')
             shell = Shell(args.editor, config, devs, timing=args.timing)
             try:
                 shell.cmdloop(cmd_line)

@@ -1,5 +1,5 @@
-from print_ import dprint, eprint, qprint
-from print_ import DIR_COLOR, END_COLOR, PY_COLOR
+from . print_ import dprint, eprint, qprint
+from . print_ import DIR_COLOR, END_COLOR, PY_COLOR
 
 import os
 import sys
