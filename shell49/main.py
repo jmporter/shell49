@@ -6,10 +6,6 @@
    programs.
 """
 
-import sys
-print("path = ", sys.path)
-# sys.path.append('shell49')
-
 from . config import Config
 from . shell import Shell
 from . devs import Devs

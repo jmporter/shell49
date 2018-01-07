@@ -47,11 +47,15 @@ import traceback
 
 BROKEN_READLINE = False
 
-if 'libedit' in readline.__doc__:
-    readline.parse_and_bind ("bind ^I rl_complete")
-    BROKEN_READLINE = True
-else:
-    readline.parse_and_bind("tab: complete")
+try:
+    # on windows, readline.__doc__ is None!
+    if 'libedit' in readline.__doc__:
+        readline.parse_and_bind("bind ^I rl_complete")
+        BROKEN_READLINE = True
+    else:
+        readline.parse_and_bind("tab: complete")
+finally:
+    pass
 
 FAKE_INPUT_PROMPT = False
 
