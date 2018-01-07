@@ -1,5 +1,5 @@
 from . print_ import dprint, eprint, oprint, qprint, cprint
-from . print_ import PROMPT_COLOR, END_COLOR, PY_COLOR, DIR_COLOR, OUTPUT_COLOR, LT_BLUE
+from . print_ import PROMPT_COLOR, END_COLOR, PY_COLOR, DIR_COLOR, OUTPUT_COLOR
 import shell49.print_
 from . config import Config, ConfigError
 from . device import DeviceError
@@ -454,7 +454,7 @@ class Shell(cmd.Cmd):
         List all MicroPython boards advertising repl telnet via mdns.
         """
         listener = MdnsListenter()
-        cprint("url                  ip               port   spec", color=LT_BLUE)
+        cprint("url                  ip               port   spec", color=PY_COLOR)
         for b in listener.listen(seconds=1):
             oprint("{:20s} {:14s}    {:2d}    {}".format(b.url, b.ip, b.port, b.spec))
 

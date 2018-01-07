@@ -62,7 +62,7 @@ OUTPUT_COLOR = LT_MAGENTA
 def nocolor():
     """Disable output coloring"""
     global DIR_COLOR, PROMPT_COLOR, PY_COLOR, END_COLOR
-    global DEBUG_COLOR, ERR_COLOR, QUIET_COLOR, OUTPUT_COLOR
+    global DEBUG_COLOR, ERR_COLOR, QUIET_COLOR, OUTPUT_COLOR, NO_COLOR
     DIR_COLOR = ''
     PROMPT_COLOR = ''
     PY_COLOR = ''
@@ -71,6 +71,7 @@ def nocolor():
     ERR_COLOR = ''
     QUIET_COLOR = ''
     OUTPUT_COLOR = ''
+    NO_COLOR = ''
 
 
 def cprint(*a, color=NO_COLOR, file=sys.stdout, **kw):
