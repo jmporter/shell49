@@ -134,7 +134,7 @@ class Pyboard:
             else:
                 if delayed:
                     print('')
-                raise PyboardError('failed to access ' + device)
+                raise PyboardError('failed to access {}'.format(self.port))
             if delayed:
                 print('')
 

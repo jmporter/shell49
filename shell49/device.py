@@ -28,7 +28,7 @@ class Device(object):
         self.pyb = pyb
         # try to retrieve the current name from the board
         name = self.remote_eval(board_name, default_name)
-        qprint("set_pyb name = {}".format(name))
+        qprint("Connected to board '{}'".format(name))
         # update id to match true board name
         self.id = self.config.find_board_by_name(name, create=True)
         self.has_buffer = self.remote_eval(test_buffer)
