@@ -11,7 +11,7 @@ from . shell import Shell
 from . devs import Devs
 from . device import DeviceError
 from . print_ import oprint, qprint, eprint, dprint, cprint, nocolor
-import shell49.print_
+import shell49.print_ as print_
 
 import os
 import sys
@@ -21,7 +21,7 @@ def real_main():
     """The main program."""
     default_config = os.getenv('SHELL49_CONFIG_FILE') or '~/.shell49_rc.py'
     default_editor = os.getenv('SHELL49_EDITOR') or os.getenv('VISUAL') or os.getenv('EDITOR') or 'vi'
-    default_nocolor = 'win' in sys.platform
+    default_nocolor = 'win32' in sys.platform
     default_debug = False
     default_quiet = False
 
@@ -96,8 +96,8 @@ Environment variables:
     )
     args = parser.parse_args(sys.argv[1:])
 
-    shell49.print_.DEBUG = args.debug
-    shell49.print_.QUIET = args.quiet
+    print_.DEBUG = args.debug
+    print_.QUIET = args.quiet
     if args.nocolor: nocolor()
 
     dprint("debug = %s" % args.debug)

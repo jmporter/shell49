@@ -58,7 +58,6 @@ ERR_COLOR = LT_RED
 QUIET_COLOR = DK_BLACK
 OUTPUT_COLOR = LT_MAGENTA
 
-
 def nocolor():
     """Disable output coloring"""
     global DIR_COLOR, PROMPT_COLOR, PY_COLOR, END_COLOR

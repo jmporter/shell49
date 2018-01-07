@@ -1,5 +1,5 @@
 from . print_ import dprint, eprint, qprint
-from . print_ import DIR_COLOR, END_COLOR, PY_COLOR
+import shell49.print_ as print_
 
 import os
 import sys
@@ -916,9 +916,9 @@ def decorated_filename(filename, stat):
     """
     mode = stat[0]
     if mode_isdir(mode):
-        return DIR_COLOR + filename + END_COLOR + '/'
+        return print_.DIR_COLOR + filename + print_.END_COLOR + '/'
     if filename.endswith('.py'):
-        return PY_COLOR + filename + END_COLOR
+        return print_.PY_COLOR + filename + print_.END_COLOR
     return filename
 
 

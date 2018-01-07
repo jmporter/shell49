@@ -1,6 +1,5 @@
 from . print_ import dprint, eprint, oprint, qprint, cprint
-from . print_ import PROMPT_COLOR, END_COLOR, PY_COLOR, DIR_COLOR, OUTPUT_COLOR
-import shell49.print_
+import shell49.print_ as print_
 from . config import Config, ConfigError
 from . device import DeviceError
 from . devs import DevsError
@@ -165,7 +164,7 @@ class Shell(cmd.Cmd):
 
     def set_prompt(self):
         if self.stdin == sys.stdin:
-            prompt = PROMPT_COLOR + self.cur_dir + END_COLOR + '> '
+            prompt = print_.PROMPT_COLOR + self.cur_dir + print_.END_COLOR + '> '
             if FAKE_INPUT_PROMPT:
                 print(prompt, end='')
                 self.prompt = ''
@@ -454,7 +453,7 @@ class Shell(cmd.Cmd):
         List all MicroPython boards advertising repl telnet via mdns.
         """
         listener = MdnsListenter()
-        cprint("url                  ip               port   spec", color=PY_COLOR)
+        cprint("url                  ip               port   spec", color=print_.PY_COLOR)
         for b in listener.listen(seconds=1):
             oprint("{:20s} {:14s}    {:2d}    {}".format(b.url, b.ip, b.port, b.spec))
 
@@ -537,12 +536,12 @@ class Shell(cmd.Cmd):
                 eprint("WARNING: board has no 'name' attribute. Assign with 'config -u name ...'.")
             for k in keys:
                 v = def_dev.get(k)
-                cprint("{:>20s} = {}".format(k, v), color=DIR_COLOR)
+                cprint("{:>20s} = {}".format(k, v), color=print_.DIR_COLOR)
             oprint("Defaults:")
             for k in self.config.options(0):
                 if not k in keys:
                     v = self.config.get(0, k)
-                    cprint("{:>20s} = {}".format(k, v), color=OUTPUT_COLOR)
+                    cprint("{:>20s} = {}".format(k, v), color=print_.OUTPUT_COLOR)
             return
         # parse arguments
         args = self.line_to_args(line)
@@ -1083,7 +1082,7 @@ class Shell(cmd.Cmd):
         if line[0:2] == '~ ':
             line = line[2:]
 
-        self.print(PY_COLOR, end='')
+        self.print(print_.PY_COLOR, end='')
         self.print('Entering REPL. Use Control-%c to exit.' % QUIT_REPL_CHAR)
         self.print('   Soft reset:  Control-D or sys.exit()')
         self.print('   Hard reset:  Reset button on board or machine.reset()')
@@ -1124,7 +1123,7 @@ class Shell(cmd.Cmd):
                         # means we'd need to wait for another character.
                         time.sleep(0.5)
                         # Print a newline so that the shell49 prompt looks good.
-                        self.print(PY_COLOR)
+                        self.print(print_.PY_COLOR)
                         # We stay in the loop so that we can still enter
                         # characters until we detect the reader thread quitting
                         # (mostly to cover off weird states).
@@ -1139,7 +1138,7 @@ class Shell(cmd.Cmd):
             self.stdout.flush()
             eprint(err)
         repl_thread.join()
-        self.print(END_COLOR)
+        self.print(print_.END_COLOR)
 
 
     argparse_cp = (

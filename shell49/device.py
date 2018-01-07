@@ -2,7 +2,7 @@ from . print_ import qprint, dprint, eprint
 from . pyboard import Pyboard, PyboardError
 from . remote_op import listdir, remote_repr, set_time, epoch, \
     osdebug, board_name, test_buffer
-import shell49.remote_op
+import shell49.remote_op as remote_op
 
 import inspect
 import time
@@ -132,7 +132,7 @@ class Device(object):
         # buffer_size must be consistent between remote and local methods
         # e.g. for recv_file_from_host &  send_file_to_remote
         buffer_size = self.get('buffer_size', default=128)
-        shell49.remote_op.BUFFER_SIZE = buffer_size
+        remote_op.BUFFER_SIZE = buffer_size
         has_buffer = self.has_buffer
         args_arr = [remote_repr(i) for i in args]
         kwargs_arr = ["{}={}".format(k, remote_repr(v)) for k, v in kwargs.items()]
