@@ -54,7 +54,7 @@ try:
         BROKEN_READLINE = True
     else:
         readline.parse_and_bind("tab: complete")
-finally:
+except:
     pass
 
 FAKE_INPUT_PROMPT = False
