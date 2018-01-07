@@ -21,7 +21,7 @@ def real_main():
     """The main program."""
     default_config = os.getenv('SHELL49_CONFIG_FILE') or '~/.shell49_rc.py'
     default_editor = os.getenv('SHELL49_EDITOR') or os.getenv('VISUAL') or os.getenv('EDITOR') or 'vi'
-    default_nocolor = False
+    default_nocolor = 'win' in sys.platform
     default_debug = False
     default_quiet = False
 
