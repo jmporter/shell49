@@ -22,6 +22,7 @@ class Device(object):
         self.config = config
         self.has_buffer = False  # needs to be set for remote_eval to work
         self.id = config.find_board_by_name(default_name)
+        self.root_dirs = []
 
 
     def _set_pyb(self, pyb, default_name):

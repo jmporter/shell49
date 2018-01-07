@@ -47,7 +47,7 @@ class Config:
             raise ConfigError("{} is not a valid Python identifier".format(option))
         if keyword.iskeyword(option):
             raise ConfigError("{}: keywords are not permitted as option names".format(option))
-        if option != 'name' and not 'name' in self.options(board_id):
+        if board_id != 0 and option != 'name' and not 'name' in self.options(board_id):
             raise ConfigError("assign board name before setting option values (config name ...)")
         if option == 'name' and board_id == 0:
             raise ConfigError("illegal assignment of name to default board configuration")
