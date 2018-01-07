@@ -265,6 +265,7 @@ class DeviceSerial(Device):
             pyb = Pyboard(self.port, baudrate=baud, wait=wait)
         except PyboardError as err:
             eprint(err)
+            return
             # sys.exit(1)
 
         # Bluetooth devices take some time to connect at startup, and writes
