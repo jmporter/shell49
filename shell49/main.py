@@ -14,6 +14,7 @@ from . print_ import oprint, qprint, eprint, dprint, cprint
 import shell49.print_
 
 import os
+import sys
 import argparse
 
 def real_main():
