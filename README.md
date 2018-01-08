@@ -1,6 +1,6 @@
 # shell49
 
-Remote MicroPytyhon shell based on Dave Hylands [rshell](https://github.com/dhylands/rshell).
+Remote MicroPytyhon shell based on Dave Hylands' [rshell](https://github.com/dhylands/rshell).
 
 ## Main features:
 
