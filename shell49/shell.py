@@ -12,7 +12,7 @@ from . remote_op import is_pattern, resolve_path, auto, get_mode, mode_isdir, \
     listdir_matches, escape, validate_pattern
 from . getch import getch
 from . mdns_client import MdnsListenter
-from . flasher import LoborisFlasher
+from . flasher import Flasher, FlasherError
 
 from datetime import datetime
 from tempfile import NamedTemporaryFile
@@ -574,6 +574,13 @@ class Shell(cmd.Cmd):
 
     argparse_flash = (
         add_arg(
+            '-l', '--list',
+            dest='list',
+            action='store_true',
+            help='list firmware versions (no flashing)',
+            default=False
+        ),
+        add_arg(
             '-e', '--erase',
             dest='erase',
             action='store_true',
@@ -581,32 +588,60 @@ class Shell(cmd.Cmd):
             default=False
         ),
         add_arg(
-            '--version',
+            '-v', '--version',
             dest='version',
             help='firmware version',
-            default='latest'
+            default='STABLE'
         ),
         add_arg(
-            '--versions',
-            dest='versions',
-            action='store_true',
-            help='list firmware versions (no flashing)',
-            default=False
+            '-b', '--board',
+            dest='board',
+            help='microcontroller board (e.g. HUZZAH32)',
+            default=None
         ),
     )
 
 
     def do_flash(self, line):
-        """flash [--versions] [-e | --erase] [--version VERSION]"""
+        """flash [-l|--list] [-e|--erase] [-v|--version VERSION] [-b|--board BOARD]
+
+        Flash firmware to microcontroller.
+        """
+
         args = self.line_to_args(line)
-        flasher = LoborisFlasher()
-        if args.versions:
-            for v in flasher.versions():
-                oprint(v)
-            return
-        if args.erase:
-            flasher.erase_flash()
-        flasher.flash(version=args.version)
+        firmware_url = "https://people.eecs.berkeley.edu/~boser/iot49/firmware"
+        flash_options = "--chip esp32 " \
+          "--before default_reset --after hard_reset " \
+          "write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect"
+        id = 0
+        try:
+            id = self.devs.default_device().get_id()
+        except DevsError:
+            pass
+        firmware_url = self.config.get(id, "firmware_url", firmware_url)
+        flash_options = self.config.get(id, "flash_options", flash_options)
+        port = self.config.get(id, "port", "/dev/cu.SLAB_USBtoUART")
+        baudrate = self.config.get(id, "baudrate", 921600)
+        board = self.config.get(id, "board", "HUZZAH32")
+        if args.board: board = args.board
+
+        dprint("firmware url: ", firmware_url)
+        dprint("flash options:", flash_options)
+        dprint("port:         ", port)
+        dprint("baudrate:     ", baudrate)
+        dprint("board:        ", board)
+
+        try:
+            f = Flasher(board=board, url=firmware_url)
+            if args.list:
+                oprint("available firmware versions:")
+                oprint('\n'.join([ "  {:8s} {}".format(v, d) for v, d in f.versions()]))
+                return
+            if args.erase:
+                f.erase_flash(port)
+            f.flash(args.version, flash_options=flash_options, port=port, baudrate=baudrate)
+        except FlasherError as e:
+            eprint(e)
 
 
     def complete_cat(self, text, line, begidx, endidx):
@@ -1353,8 +1388,8 @@ class Shell(cmd.Cmd):
 
         Turn debug output on/off.
         """
-        shell49.print_.DEBUG = 'on' in line
-        oprint("Debug is {}".format('on' if shell49.print_.DEBUG else 'off'))
+        print_.DEBUG = 'on' in line
+        oprint("Debug is {}".format('on' if print_.DEBUG else 'off'))
 
 
     def do_quiet(self, line):
@@ -1362,5 +1397,5 @@ class Shell(cmd.Cmd):
 
         Turn on/off verbose output.
         """
-        shell49.print_.QUIET = 'on' in line
-        oprint("Quiet is {}".format('on' if shell49.print_.QUIET else 'off'))
+        print_.QUIET = 'on' in line
+        oprint("Quiet is {}".format('on' if print_.QUIET else 'off'))

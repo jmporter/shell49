@@ -96,6 +96,7 @@ class Config:
     def _create_default(self):
         self._config = { 'boards': [
                 {
+                    'board': 'HUZZAH32',
                     'baudrate': 115200,
                     'buffer_size': 1024,
                     'binary_transfer': True,
@@ -106,7 +107,11 @@ class Config:
                     'remote_dir': '/flash',
                     'rsync_includes': '*.py,*.json,*.txt,*.html',
                     'rsync_excludes': '.*,__*__,config.py',
-                    'port': '/dev/cu.SLAB_USBtoUART'
+                    'port': '/dev/cu.SLAB_USBtoUART',
+                    'flash_options': "--chip esp32 " \
+                        "--before default_reset --after hard_reset " \
+                        "write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect ",
+                    'firmware_url': "https://people.eecs.berkeley.edu/~boser/iot49/firmware" \
                 }
             ]}
 
