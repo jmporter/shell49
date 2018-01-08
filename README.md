@@ -47,4 +47,4 @@ help
 * [Connect to MicroPython board](doc/connect.md)
 * REPL console - type `repl` at the `shell49` prompt
 * [Run program stored in file on host](doc/run.md)
-* Copy files to/from MicroPython board
+* Copy files to/from MicroPython board. See `help` for `cp`, `rsync`, `ls`, `mkdir`, `cd`, `rm`.
