@@ -2,11 +2,11 @@
 
 Remote MicroPytyhon shell based on Dave Hylands [rshell](https://github.com/dhylands/rshell).
 
-### Main features:
+## Main features:
 
 * Connect to one or more microcontrollers with MicroPython over a wired connection or wirelessly,
 * Flash firmware to the microcontroller (`flash`),
-* Copy files from the host to the microcontroller (`cp`, `rsync`, `ls`, `mkdir`, `rm`),
+* Copy files from the host to the microcontroller (`cp`, `rsync`, `ls`, `mkdir`, `cd`, `rm`),
 * Send files from the host to the microcontroller for execution (`run`),
 * Open a `REPL` console on the microcontroller (`repl`)
 
@@ -44,7 +44,7 @@ help
 ## Common Tasks
 
 * [Flash MicroPython firmware](doc/flash.md)
-* Connect to MicroPython board
-* REPL console
-* Run program stored in file on host
+* [Connect to MicroPython board](doc/connect.md)
+* REPL console - type `repl` at the `shell49` prompt
+* [Run program stored in file on host](doc/run.md)
 * Copy files to/from MicroPython board

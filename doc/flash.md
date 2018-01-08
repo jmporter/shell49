@@ -9,16 +9,18 @@ The first time, several configuration variables need to be set. After this initi
 Set configuration values with
 
 ```
-config <option> <value>
+config --default <option> <value>
 ```
 
 For example,
 
 ```
-config port /dev/ttyUSB0
+config --default port /dev/ttyUSB0
 ```
 
 sets the serial port.
+
+Do not specify the `--default` option if you have multiple boards with different configuration parameters. 
 
 Type
 
@@ -26,7 +28,7 @@ Type
 config
 ```
 
-without arguments to get a list of default values.
+without arguments to get a list of configuration values for the currently active board (see `boards` command) and all default values.
 
 Below is a list of parameters used for flashing:
 
@@ -52,3 +54,11 @@ Options:
 * `--version ...` Sets the firmware option to flash. Usually the default (`STABLE`) is appropriate.
 * `--erase` erases the entire flash. Without this option, the file stored on the microcontroller are left unchanged and only the new firmware is written. Use this option when flashing a new controller on which MicroPython has not previously been installed or when the file system is corrupt.
 * `--board ...` overwrites the `board` option in the configuration.
+
+After flashing the firmware for the first time, run
+
+```
+config -u name <board-name>
+```
+
+Replace `<board-name>` with the name for your board, e.g. `my-super-computer`. The `-u` option flashes the name to the board (file `config.py`). Later when connecting to a board `shell49` retrieves the name and matches it to the stored configuration.
