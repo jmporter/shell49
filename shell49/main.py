@@ -27,8 +27,8 @@ def real_main():
 
     parser = argparse.ArgumentParser(
         prog="shell49",
-        usage="%(prog)s [options] [command]",
-        description="Remote Shell for a MicroPython board.",
+        usage="%(prog)s [options] [cmd]",
+        description="Remote Shell for MicroPython boards.",
         epilog=(
 """
 Environment variables:
@@ -52,7 +52,7 @@ Environment variables:
     parser.add_argument(
         "-f", "--file",
         dest="filename",
-        help="Specifies a file of commands to process."
+        help="Specify a file of commands to process."
     )
     parser.add_argument(
         "-d", "--debug",
@@ -62,13 +62,6 @@ Environment variables:
         default=default_debug
     )
     parser.add_argument(
-        "--quiet",
-        dest="quiet",
-        action="store_true",
-        help="Turns off some output (default: %s)" % default_quiet,
-        default=False
-    )
-    parser.add_argument(
         "-n", "--nocolor",
         dest="nocolor",
         action="store_true",
@@ -76,17 +69,24 @@ Environment variables:
         default=default_nocolor
     )
     parser.add_argument(
+        '-V', '--version',
+        dest='version',
+        action='store_true',
+        help='Report the version and exit.',
+        default=False
+    )
+    parser.add_argument(
+        "--quiet",
+        dest="quiet",
+        action="store_true",
+        help="Turn off some output (default: %s)" % default_quiet,
+        default=False
+    )
+    parser.add_argument(
         "--timing",
         dest="timing",
         action="store_true",
         help="Print timing information about each command",
-        default=False
-    )
-    parser.add_argument(
-        '-V', '--version',
-        dest='version',
-        action='store_true',
-        help='Reports the version and exits.',
         default=False
     )
     parser.add_argument(

@@ -7,11 +7,6 @@ if sys.version_info < (3,4):
 
 from shell49.version import __version__
 
-if False:
-    here = os.path.abspath(os.path.dirname(__file__))
-    with open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
-        long_description = f.read()
-
 setup(
   name = 'shell49',
   packages = ['shell49'],

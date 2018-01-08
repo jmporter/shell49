@@ -621,7 +621,7 @@ class Shell(cmd.Cmd):
         firmware_url = self.config.get(id, "firmware_url", firmware_url)
         flash_options = self.config.get(id, "flash_options", flash_options)
         port = self.config.get(id, "port", "/dev/cu.SLAB_USBtoUART")
-        baudrate = self.config.get(id, "baudrate", 921600)
+        baudrate = self.config.get(id, "flash_baudrate", 921600)
         board = self.config.get(id, "board", "HUZZAH32")
         if args.board: board = args.board
 

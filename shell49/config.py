@@ -100,7 +100,7 @@ class Config:
                     'baudrate': 115200,
                     'buffer_size': 1024,
                     'binary_transfer': True,
-                    'time_offset': 0,  # 946684800,
+                    'time_offset': 946684800,
                     'user': 'micro',
                     'password': 'python',
                     'host_dir': '~/iot49',
@@ -108,10 +108,9 @@ class Config:
                     'rsync_includes': '*.py,*.json,*.txt,*.html',
                     'rsync_excludes': '.*,__*__,config.py',
                     'port': '/dev/cu.SLAB_USBtoUART',
-                    'flash_options': "--chip esp32 " \
-                        "--before default_reset --after hard_reset " \
-                        "write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect ",
-                    'firmware_url': "https://people.eecs.berkeley.edu/~boser/iot49/firmware" \
+                    'flash_options': "--chip esp32 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect ",
+                    'firmware_url': "https://people.eecs.berkeley.edu/~boser/iot49/firmware",
+                    'flash_baudrate': 921600,
                 }
             ]}
 
