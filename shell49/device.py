@@ -23,6 +23,7 @@ class Device(object):
         self.has_buffer = False  # needs to be set for remote_eval to work
         self.id = config.find_board_by_name(default_name)
         self.root_dirs = []
+        self.pyb = None
 
 
     def _set_pyb(self, pyb, default_name):
@@ -211,6 +212,10 @@ class Device(object):
         if self.pyb is None:
             return 'closed'
         return 'connected'
+
+
+    def connected(self):
+        return self.pyb is not None
 
 
     def sync_time(self):

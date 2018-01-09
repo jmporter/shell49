@@ -90,9 +90,10 @@ class Devs:
 
 
     def add_device(self, dev):
-        """Adds a device to the list of devices we know about."""
-        self._devices.append(dev)
-        if not self._default_dev:  self._default_dev = dev
+        """Adds a device to the list of devices we know about and make it the new default."""
+        if dev.connected():
+            self._devices.append(dev)
+            self._default_dev = dev
 
 
     def get_dev_and_path(self, filename):

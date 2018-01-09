@@ -11,6 +11,7 @@ from . shell import Shell
 from . devs import Devs
 from . device import DeviceError
 from . print_ import oprint, qprint, eprint, dprint, cprint, nocolor
+from . pyboard import PyboardError
 import shell49.print_ as print_
 
 import os
@@ -118,7 +119,8 @@ Environment variables:
                 devs.connect_serial(config.get(0, 'port', '/dev/cu.SLAB_USBtoUART'))
         except DeviceError as err:
             eprint(err)
-            autoscan()
+        except PyboardError as e:
+            eprint(e)
 
         if args.filename:
             with open(args.filename) as cmd_file:

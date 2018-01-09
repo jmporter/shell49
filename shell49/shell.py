@@ -29,6 +29,7 @@ import itertools
 import fnmatch
 import threading
 import traceback
+import serial
 
 
 # D.H.: I got the following from
@@ -213,9 +214,10 @@ class Shell(cmd.Cmd):
                     self.onecmd_exec("".join(group))
         except KeyboardInterrupt:
             pass
-        except:
-            eprint("*** Uncaught exception")
-            traceback.print_exc(file=sys.stdout)
+        except Exception as e:
+            eprint("***", e)
+            if print_.DEBUG:
+                traceback.print_exc(file=sys.stdout)
 
     def onecmd_exec(self, line):
         try:
@@ -531,12 +533,14 @@ class Shell(cmd.Cmd):
         def_dev = self.devs.default_device()
         # no arguments ... just print configuration of current default device
         if line == '':
-            keys = def_dev.options()
-            if not 'name' in keys:
-                eprint("WARNING: board has no 'name' attribute. Assign with 'config -u name ...'.")
-            for k in keys:
-                v = def_dev.get(k)
-                cprint("{:>20s} = {}".format(k, v), color=print_.DIR_COLOR)
+            keys = {}
+            if def_dev.get_id() != 0:
+                keys = def_dev.options()
+                if not 'name' in keys:
+                    eprint("WARNING: board has no 'name' attribute. Assign with 'config -u name ...'.")
+                for k in keys:
+                    v = def_dev.get(k)
+                    cprint("{:>20s} = {}".format(k, v), color=print_.DIR_COLOR)
             oprint("Defaults:")
             for k in self.config.options(0):
                 if not k in keys:
@@ -700,7 +704,7 @@ class Shell(cmd.Cmd):
 
     def do_connect(self, line):
         """connect TYPE TYPE_PARAMS       Connect boards to shell49.
-        connect serial [port [baud]]   Serial connection. Uses defaults from config file.
+        connect serial [port]          Serial connection. Uses defaults from config file.
         connect telnet [url]           Wireless connection. If no url/ip address is
                                        specified, connects to all known boards advertising
                                        repl service via mDNS.
@@ -709,14 +713,12 @@ class Shell(cmd.Cmd):
               Doing so may block communication with the board.
         """
         args = self.line_to_args(line)
-        num_args = len(args)
-        if num_args < 1:
+        if len(args) < 1:
             eprint('Missing connection TYPE')
             return
         connect_type = args[0]
         if connect_type == 'serial':
-            port = args[1] if num_args > 1 else self.config.get(0, 'port', '/dev/cu.SLAB_USBtoUART')
-            baud = args[2] if num_args > 2 else self.config.get(0, 'baudrate', 115200)
+            port = args[1] if len(args) > 1 else self.config.get(0, 'port', '/dev/cu.SLAB_USBtoUART')
             # Note: board may be connected over telnet, but we don't know ...
             #       in this case, connect blocks
             if self.devs.find_serial_device_by_port(port):
@@ -724,16 +726,19 @@ class Shell(cmd.Cmd):
                 return
             self.devs.connect_serial(port)
         elif connect_type == 'telnet':
-            if num_args > 1:
-                self.devs.connect_telnet(name)
+            if len(args) > 1:
+                self.devs.connect_telnet(args[1])
             else:
                 listener = MdnsListenter()
                 for b in listener.listen(seconds=1):
+                    qprint("found '{}' ({})".format(b.url, b.ip))
                     # connect only to boards in the config database
                     if self.config.find_board_by_name(b.hostname) == 0:
+                        qprint("not in db, skip!")
                         continue
                     # we are not already connected to
                     if self.devs.is_connected(b.hostname):
+                        qprint("already connected")
                         continue
                     # let's connect!
                     self.devs.connect_telnet(b.url)

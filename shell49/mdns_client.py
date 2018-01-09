@@ -11,7 +11,7 @@ class MdnsListenter:
 
 
     def listen(self, service="_repl._tcp.local.", seconds=5):
-        """Listen for mdns messages for specified time.
+        """Listen for mDNS messages for specified time.
 
         Return list of responses.
         """
