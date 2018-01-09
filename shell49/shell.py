@@ -723,11 +723,11 @@ class Shell(cmd.Cmd):
         connect_type = args[0]
         if connect_type == 'serial':
             port = args[1] if len(args) > 1 else self.config.get(0, 'port', '/dev/cu.SLAB_USBtoUART')
-            baud = args[2] if len(args) > 2 else self.config.get(0, 'port', '/dev/cu.SLAB_USBtoUART')
+            baud = args[2] if len(args) > 2 else self.config.get(0, 'baudrate', '115200')
             try:
                 baud = int(baud)
             except ValueError:
-                eprint("Baudrate must be numbric. Got '{}'".format(baud))
+                eprint("Not a valid baudrate, '{}'".format(baud))
                 return
             # Note: board may be connected over telnet, but we don't know ...
             #       in this case, connect blocks

@@ -77,9 +77,9 @@ class Devs:
 
     def connect_serial(self, port, baudrate=None):
         """Connect to MicroPython board plugged into the specfied port."""
-        qprint("Connecting via serial to {} ...".format(port))
         if not baudrate:
             baudrate = self.config.get('default', 'baudrate', 115200)
+        qprint("Connecting via serial to {} @ {} baud ...".format(port, baudrate))
         dev = DeviceSerial(self.config, port, baudrate)
         self.add_device(dev)
 

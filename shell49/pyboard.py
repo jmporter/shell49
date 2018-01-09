@@ -27,6 +27,7 @@ class PyboardError(BaseException):
 class TelnetToSerial:
     def __init__(self, ip, user, password, read_timeout=None):
         import telnetlib
+        self.ip = ip
         self.tn = telnetlib.Telnet(ip, timeout=15)
         self.read_timeout = read_timeout
         if b'Login as:' in self.tn.read_until(b'Login as:', timeout=read_timeout):
@@ -74,8 +75,11 @@ class TelnetToSerial:
         return data
 
     def write(self, data):
-        self.tn.write(data)
-        return len(data)
+        try:
+            self.tn.write(data)
+            return len(data)
+        except BrokenPipeError as e:
+            raise PyboardError("Broken pipe to '{}'".format(self.ip))
 
     def inWaiting(self):
         n_waiting = len(self.fifo)
