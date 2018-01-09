@@ -526,26 +526,31 @@ class Shell(cmd.Cmd):
     )
 
 
+    def print_config(self, id, *, exc = {}, color=print_.OUTPUT_COLOR):
+        for k in self.config.options(id):
+            if not k in exc:
+                v = self.config.get(id, k)
+                cprint("{:>20s} = {}".format(k, v), color=color)
+
+
     def do_config(self, line):
         """config                                   Print option values of default board.
        config [-u] [-d] [--default] OPTION [VALUE]   Get/set OPTION of default board to VALUE.
         """
-        def_dev = self.devs.default_device()
+        try:
+            def_dev = self.devs.default_device()
+        except DevsError:
+            qprint("No boards are connected, showing default configuration:")
+            self.print_config(0)
+            return
         # no arguments ... just print configuration of current default device
         if line == '':
-            keys = {}
-            if def_dev.get_id() != 0:
-                keys = def_dev.options()
-                if not 'name' in keys:
-                    eprint("WARNING: board has no 'name' attribute. Assign with 'config -u name ...'.")
-                for k in keys:
-                    v = def_dev.get(k)
-                    cprint("{:>20s} = {}".format(k, v), color=print_.DIR_COLOR)
+            keys = def_dev.options()
+            if not 'name' in keys:
+                eprint("WARNING: board has no 'name' attribute. Assign with 'config -u name ...'.")
+            self.print_config(def_dev.get_id(), color=print_.PY_COLOR)
             oprint("Defaults:")
-            for k in self.config.options(0):
-                if not k in keys:
-                    v = self.config.get(0, k)
-                    cprint("{:>20s} = {}".format(k, v), color=print_.OUTPUT_COLOR)
+            self.print_config(0, exc=keys)
             return
         # parse arguments
         args = self.line_to_args(line)
