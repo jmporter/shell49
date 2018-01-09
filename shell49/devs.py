@@ -43,7 +43,7 @@ class Devs:
     def find_device_by_name(self, name):
         """Find board by name."""
         for d in self._devices:
-            if d.name == name: return d
+            if d.name() == name: return d
         return self._default_dev
 
 
@@ -75,17 +75,19 @@ class Devs:
         return sum(x is not None for x in self._devices)
 
 
-    def connect_serial(self, port, board_name=None):
+    def connect_serial(self, port, baudrate=None):
         """Connect to MicroPython board plugged into the specfied port."""
         qprint("Connecting via serial to {} ...".format(port))
-        dev = DeviceSerial(port, self.config, board_name)
+        if not baudrate:
+            baudrate = self.config.get('default', 'baudrate', 115200)
+        dev = DeviceSerial(self.config, port, baudrate)
         self.add_device(dev)
 
 
-    def connect_telnet(self, ip_address, board_name=None):
+    def connect_telnet(self, ip_address):
         """Connect to MicroPython board at specified IP address."""
-        qprint("Connecting via telnet to {} ...".format(ip_address))
-        dev = DeviceNet(ip_address, self.config, board_name)
+        qprint("Connecting via telnet to '{}' ...".format(ip_address))
+        dev = DeviceNet(self.config, ip_address)
         self.add_device(dev)
 
 

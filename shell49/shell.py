@@ -9,7 +9,7 @@ from . remote_op import is_pattern, resolve_path, auto, get_mode, mode_isdir, \
     decorated_filename, print_cols, mode_isfile, cat, column_print, \
     get_ip_address, get_mac_address, get_time, set_time, osdebug, get_filesize, \
     cp, rsync, mkdir, rm, process_pattern, print_long, trim, unescape, \
-    listdir_matches, escape, validate_pattern
+    listdir_matches, escape, validate_pattern, get_unique_id
 from . getch import getch
 from . mdns_client import MdnsListenter
 from . flasher import Flasher, FlasherError
@@ -216,8 +216,7 @@ class Shell(cmd.Cmd):
             pass
         except Exception as e:
             eprint("***", e)
-            if print_.DEBUG:
-                traceback.print_exc(file=sys.stdout)
+            traceback.print_exc(file=sys.stdout)
 
     def onecmd_exec(self, line):
         try:
@@ -541,7 +540,7 @@ class Shell(cmd.Cmd):
             def_dev = self.devs.default_device()
         except DevsError:
             qprint("No boards are connected, showing default configuration:")
-            self.print_config(0)
+            self.print_config('default')
             return
         # no arguments ... just print configuration of current default device
         if line == '':
@@ -550,7 +549,7 @@ class Shell(cmd.Cmd):
                 eprint("WARNING: board has no 'name' attribute. Assign with 'config -u name ...'.")
             self.print_config(def_dev.get_id(), color=print_.PY_COLOR)
             oprint("Defaults:")
-            self.print_config(0, exc=keys)
+            self.print_config('default', exc=keys)
             return
         # parse arguments
         args = self.line_to_args(line)
@@ -559,12 +558,12 @@ class Shell(cmd.Cmd):
             value = eval(value)
         except:
             pass
-        section = 0 if args.default else def_dev.get_id()
+        board_id = 'default' if args.default else def_dev.get_id()
         if args.delete:
-            self.config.remove(section, args.option)
+            self.config.remove(board_id, args.option)
         else:
             try:
-                self.config.set(section, args.option, value)
+                self.config.set(board_id, args.option, value)
             except ConfigError as e:
                 eprint("*** {}".format(e))
         if args.upload:
@@ -709,7 +708,7 @@ class Shell(cmd.Cmd):
 
     def do_connect(self, line):
         """connect TYPE TYPE_PARAMS       Connect boards to shell49.
-        connect serial [port]          Serial connection. Uses defaults from config file.
+        connect serial [port [baud]]   Serial connection. Uses defaults from config file.
         connect telnet [url]           Wireless connection. If no url/ip address is
                                        specified, connects to all known boards advertising
                                        repl service via mDNS.
@@ -724,26 +723,32 @@ class Shell(cmd.Cmd):
         connect_type = args[0]
         if connect_type == 'serial':
             port = args[1] if len(args) > 1 else self.config.get(0, 'port', '/dev/cu.SLAB_USBtoUART')
+            baud = args[2] if len(args) > 2 else self.config.get(0, 'port', '/dev/cu.SLAB_USBtoUART')
+            try:
+                baud = int(baud)
+            except ValueError:
+                eprint("Baudrate must be numbric. Got '{}'".format(baud))
+                return
             # Note: board may be connected over telnet, but we don't know ...
             #       in this case, connect blocks
             if self.devs.find_serial_device_by_port(port):
                 eprint("board already connected on '{}'".format(port))
                 return
-            self.devs.connect_serial(port)
+            self.devs.connect_serial(port, baud)
         elif connect_type == 'telnet':
             if len(args) > 1:
                 self.devs.connect_telnet(args[1])
             else:
                 listener = MdnsListenter()
                 for b in listener.listen(seconds=1):
-                    qprint("found '{}' ({})".format(b.url, b.ip))
+                    qprint("Heard from '{}' ({})".format(b.url, b.ip))
                     # connect only to boards in the config database
-                    if self.config.find_board_by_name(b.hostname) == 0:
-                        qprint("not in db, skip!")
+                    if not self.config.has_board_with_name(b.hostname):
+                        qprint("  not in db, skip!")
                         continue
                     # we are not already connected to
                     if self.devs.is_connected(b.hostname):
-                        qprint("already connected")
+                        qprint("  already connected")
                         continue
                     # let's connect!
                     self.devs.connect_telnet(b.url)
@@ -1380,6 +1385,14 @@ class Shell(cmd.Cmd):
         Inquire and print out MAC address of micropython board.
         """
         oprint(self.devs.default_device().remote(get_mac_address).decode('utf-8'), end='')
+
+
+    def do_id(self, line):
+        """id
+
+        Inquire board id (machine.unique_id()).
+        """
+        oprint(self.devs.default_device().remote(get_unique_id, "none").decode('utf-8'), end='')
 
 
     def do_osdebug(self, line):

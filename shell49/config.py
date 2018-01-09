@@ -1,11 +1,12 @@
 #! /usr/bin/env python3
 
-from . print_ import cprint, qprint, eprint
+from . print_ import cprint, qprint, eprint, dprint, oprint
 
 from pprint import pprint
 from datetime import datetime
 from ast import literal_eval
 import keyword
+import sys
 import os
 import io
 
@@ -23,22 +24,10 @@ class Config:
         self._config = {}
         self._load()
 
-    def add_board(self, name=None):
-        """Add board database record.
-        Return board_id.
-        """
-        if self.find_board_by_name(name):
-            dprint("Config.add_board: Board '{}' exists".format(name))
-            return self.find_board_by_name(name)
-        board = {}
-        if name:
-            board = { 'name': name }
-            self._modified = True
-        self._boards().append(board)
-        return len(self._boards())-1
-
     def set(self, board_id, option, value):
         """Set board option parameter value. board_id = 0 is default entries."""
+        dprint("config.set id={} {}={}".format(board_id, option, value))
+        if board_id == 0: board_id = 'default'
         if not option:
             return
         if not isinstance(option, str):
@@ -47,43 +36,39 @@ class Config:
             raise ConfigError("{} is not a valid Python identifier".format(option))
         if keyword.iskeyword(option):
             raise ConfigError("{}: keywords are not permitted as option names".format(option))
-        if board_id != 0 and option != 'name' and not 'name' in self.options(board_id):
-            raise ConfigError("assign board name before setting option values (config name ...)")
-        if option == 'name' and board_id == 0:
-            raise ConfigError("illegal assignment of name to default board configuration")
-        if option == 'name' and self.find_board_by_name(value) != 0:
-            raise ConfigError("board with name '{}' exists already in database".format(value))
         self._modified = True
-        self._boards()[board_id][option] = value
+        boards = self._boards()
+        if not board_id in boards:
+            boards[board_id] = {}
+        boards[board_id][option] = value
 
     def get(self, board_id, option, default=None):
         """Get board option parameter value."""
+        if board_id == 0: board_id = 'default'
         boards = self._boards()
-        return boards[board_id].get(option, boards[0].get(option, default))
+        try:
+            return boards[board_id].get(option, boards['default'].get(option, default))
+        except KeyError:
+            return default
 
-    def remove(self, board_id, option=None):
+    def remove(self, board_id, option):
         """Remove board option or entire record if option=None."""
+        if board_id == 0: board_id = 'default'
+        dprint("config.remove id={} option={}".format(board_id, option))
         try:
             self._modified = True
-            if option:
-                del self._boards()[board_id][option]
-            elif board_id != 0:
-                self._boards()[board_id] = None
+            del self._boards()[board_id][option]
         except KeyError:
             pass
 
-    def find_board_by_name(self, name, create=False):
-        """Return id of board with specified name.
+    def has_board_with_name(self, name):
+        """Check if board_id is known."""
+        for b in self._boards().values():
+            if b.get('name', None) == name:
+                return True
+        return False
 
-        If no board with the indicated name exists, a new one is created
-        (create=True) or 0 (default) is returned.
-        """
-        for i, board in enumerate(self._boards()[1:]):
-            if board.get('name') == name:
-                return i+1
-        return self.add_board(name) if create else 0
-
-    def options(self, board_id):
+    def options(self, board_id='default'):
         """Return list of option names for specified board."""
         try:
             return list(self._boards()[board_id].keys())
@@ -94,8 +79,8 @@ class Config:
         return self._config['boards']
 
     def _create_default(self):
-        self._config = { 'boards': [
-                {
+        self._config = { 'boards': {
+            'default': {
                     'board': 'HUZZAH32',
                     'baudrate': 115200,
                     'buffer_size': 1024,
@@ -110,27 +95,24 @@ class Config:
                     'port': '/dev/cu.SLAB_USBtoUART',
                     'flash_options': "--chip esp32 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect ",
                     'firmware_url': "https://people.eecs.berkeley.edu/~boser/iot49/firmware",
-                    'flash_baudrate': 921600,
-                }
-            ]}
+                    'flash_baudrate': 921600 }
+        } }
 
     def _load(self):
         qprint("Loading configuration '{}'".format(self._config_file))
         try:
             with open(self._config_file) as f:
                 self._config = literal_eval(f.read())
-        except:
-            qprint("WARNING: cannot load '{}', creating default".format(self._config_file))
+        except FileNotFoundError:
+            oprint("WARNING: configuration '{}' does not exist, creating default".format(self._config_file))
             self._create_default()
             self._modified = True
+        except SyntaxError as e:
+            eprint("Syntax error in {}: {}".format(self._config_file, e))
+            sys.exit()
 
     def save(self):
         """Save configuration to config_file."""
-        # purge boards without name
-        self._config['boards'] = [b for i, b in enumerate(self._boards()) if i is 0 or (b and b.get('name', None))]
-        for b in self._boards():
-            if not b.get('name', None):
-                b = None
         with open(self._config_file, 'w') as f:
             print("# User configuration for micropython shell49", file=f)
             print("# Machine generated on {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")), file=f)

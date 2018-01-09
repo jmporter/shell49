@@ -666,6 +666,16 @@ def get_mac_address():
         return None
 
 
+def get_unique_id(default):
+    """Returns the boards name (if available)."""
+    try:
+        from machine import unique_id
+        from binascii import hexlify
+        uid = hexlify(unique_id()).decode('ascii')
+    except:
+        uid = default
+    return repr(uid)
+
 # 0x0D's sent from the host get transformed into 0x0A's, and 0x0A sent to the
 # host get converted into 0x0D0A when using sys.stdin. sys.tsin.buffer does
 # no transformations, so if that's available, we use it, otherwise we need

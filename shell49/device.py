@@ -1,7 +1,7 @@
 from . print_ import qprint, dprint, eprint
 from . pyboard import Pyboard, PyboardError
 from . remote_op import listdir, remote_repr, set_time, epoch, \
-    osdebug, board_name, test_buffer
+    osdebug, board_name, test_buffer, get_unique_id
 import shell49.remote_op as remote_op
 
 import inspect
@@ -9,6 +9,7 @@ import time
 import serial
 import os
 import socket
+import uuid
 
 
 class DeviceError(Exception):
@@ -18,21 +19,18 @@ class DeviceError(Exception):
 
 class Device(object):
 
-    def __init__(self, config, default_name):
+    def __init__(self, config):
         self.config = config
         self.has_buffer = False  # needs to be set for remote_eval to work
-        self.id = config.find_board_by_name(default_name)
         self.root_dirs = []
         self.pyb = None
+        self.id = 'default'
 
 
-    def _set_pyb(self, pyb, default_name):
+    def _set_pyb(self, pyb):
         self.pyb = pyb
-        # try to retrieve the current name from the board
-        name = self.remote_eval(board_name, default_name)
-        qprint("Connected to board '{}', synchonizing time ...".format(name))
-        # update id to match true board name
-        self.id = self.config.find_board_by_name(name, create=True)
+        self.id = self.remote_eval(get_unique_id, uuid.uuid4().hex[:6].upper())
+        qprint("Connected to '{}' (id={}), synchonizing time ...".format(self.name(), self.id))
         self.has_buffer = self.remote_eval(test_buffer)
         dprint("find has_buffer", self.has_buffer)
         self.root_dirs = ['/{}/'.format(dir) for dir in self.remote_eval(listdir, '/')]
@@ -51,7 +49,7 @@ class Device(object):
 
 
     def name(self):
-        return self.config.get(self.id, 'name')
+        return self.config.get(self.id, 'name', 'nameless board')
 
 
     def set(self, option, value):
@@ -246,10 +244,9 @@ class Device(object):
 
 class DeviceSerial(Device):
 
-    def __init__(self, port, config, name=None):
-        super().__init__(config, name)
+    def __init__(self, config, port, baud):
+        super().__init__(config)
         self.port = port
-        baud = self.get('baudrate', default=115200)
         wait = self.get('wait', default=0)
 
         if wait and not os.path.exists(port):
@@ -299,7 +296,7 @@ class DeviceSerial(Device):
             sys.stdout.write('\n')
 
         # In theory the serial port is now ready to use
-        super()._set_pyb(pyb, name)
+        super()._set_pyb(pyb)
 
     def is_serial_port(self, port):
         return self.port == port
@@ -322,8 +319,8 @@ class DeviceSerial(Device):
 
 class DeviceNet(Device):
 
-    def __init__(self, url, config, name=None):
-        super().__init__(config, name)
+    def __init__(self, config, url):
+        super().__init__(config)
         self.url = url
         self.ip_address = socket.gethostbyname(url)
         user = self.get('user', default='micro')
@@ -332,11 +329,11 @@ class DeviceNet(Device):
         try:
             pyb = Pyboard(ip=url, user=user, password=password)
         except (socket.timeout, OSError):
-            raise DeviceError('No response from {}'.format(ip_address))
+            raise DeviceError('No response from {}'.format(self.ip_address))
         except KeyboardInterrupt:
             raise DeviceError('Interrupted')
 
-        self._set_pyb(pyb, name)
+        self._set_pyb(pyb)
 
     def timeout(self, timeout=None):
         """There is no equivalent to timeout for the telnet connection."""
