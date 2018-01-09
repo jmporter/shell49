@@ -50,7 +50,7 @@ class Devs:
     def is_connected(self, name):
         """Return True if board with specified name is already connected."""
         for d in self._devices:
-            if d.name == name: return Trie
+            if d.name() == name: return True
         return False
 
 
