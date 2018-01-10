@@ -7,6 +7,8 @@ This module provides the Pyboard class, used to communicate with and
 control the pyboard over a serial USB or telent connection.
 """
 
+from . print_ import oprint, dprint
+
 import sys
 import time
 
@@ -146,6 +148,7 @@ class Pyboard:
         self.serial.close()
 
     def read_until(self, min_num_bytes, ending, timeout=10, data_consumer=None):
+        # dprint("pyb.read_until min={}, ending='{}'".format(min_num_bytes, ending))
         data = self.serial.read(min_num_bytes)
         if data_consumer:
             data_consumer(data)
@@ -167,6 +170,7 @@ class Pyboard:
         return data
 
     def enter_raw_repl(self):
+        # dprint("enter_raw_repl ...")
         self.serial.write(b'\r\x03\x03') # ctrl-C twice: interrupt any running program
 
         # flush input (without relying on serial.flushInput())
@@ -194,6 +198,7 @@ class Pyboard:
             raise PyboardError('could not enter raw repl')
 
     def exit_raw_repl(self):
+        # dprint("exit_raw_repl")
         self.serial.write(b'\r\x02') # ctrl-B: enter friendly REPL
 
     def follow(self, timeout, data_consumer=None):
@@ -243,8 +248,8 @@ class Pyboard:
         ret = ret.strip()
         return ret
 
-    def exec(self, command):
-        ret, ret_err = self.exec_raw(command)
+    def exec(self, command, data_consumer=None):
+        ret, ret_err = self.exec_raw(command, data_consumer=data_consumer)
         if ret_err:
             raise PyboardError('exception', ret, ret_err)
         return ret
@@ -253,3 +258,11 @@ class Pyboard:
         with open(filename, 'rb') as f:
             pyfile = f.read()
         return self.exec(pyfile)
+
+    def data_consumer(self, data):
+        oprint(data.decode('utf-8'), end='')
+
+    def runfile(self, filename):
+        with open(filename, 'rb') as f:
+            pyfile = f.read()
+        self.exec(pyfile, self.data_consumer)

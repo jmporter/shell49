@@ -183,14 +183,22 @@ class Device(object):
 
 
     def execfile(self, file):
-        """Transfers file to board and runs it.
-           Same as typing contents of file at repl prompt.
-        """
+        """Transfers file to board and runs it."""
         try:
             self.pyb.enter_raw_repl()
             res = self.pyb.execfile(file)
             self.pyb.exit_raw_repl()
             return res
+        except Exception as ex:
+            eprint("*** ", ex)
+
+
+    def runfile(self, file):
+        """Transfers file to board and runs it."""
+        try:
+            self.pyb.enter_raw_repl()
+            self.pyb.runfile(file)
+            self.pyb.exit_raw_repl()
         except Exception as ex:
             eprint("*** ", ex)
 

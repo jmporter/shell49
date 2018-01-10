@@ -1331,9 +1331,7 @@ class Shell(cmd.Cmd):
     def do_run(self, line):
         """run [FILE]
 
-        Send contents of FILE from host to remote for evaluation.
-        Same effect as if contents were typed at the REPL prompt.
-        Your fingers may see it differently.
+        Experimental with known bugs.
 
         If FILE is not specified, executes the file from the last invocation.
         """
@@ -1347,8 +1345,10 @@ class Shell(cmd.Cmd):
 
         if len(args) == 0:
             qprint("run {} on micropython board".format(file))
+        else:
+            file = os.path.join(self.cur_dir, file)
         try:
-            oprint(self.devs.default_device().execfile(file).decode('utf-8'))
+            self.devs.default_device().runfile(file)
         except TypeError:
             eprint("*** No file specified")
         except FileNotFoundError:
