@@ -1331,7 +1331,7 @@ class Shell(cmd.Cmd):
     def do_run(self, line):
         """run [FILE]
 
-        Experimental with known bugs.
+        Send file to remote for execution and print results on console.
 
         If FILE is not specified, executes the file from the last invocation.
         """
