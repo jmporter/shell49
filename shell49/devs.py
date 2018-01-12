@@ -32,7 +32,7 @@ class Devs:
     def devices(self):
         """Iterate over all devices"""
         # remove devices that are disconnected
-        self._devices = filter(lambda dev: not dev.connected(), self._devices)
+        self._devices = list(filter(lambda dev: dev.connected(), self._devices))
         for dev in self._devices:
             if dev:
                 yield dev

@@ -473,7 +473,7 @@ class Shell(cmd.Cmd):
 
     def do_boards(self, line):
         """boards          List connected devices.
-        boards ID       Make board ID the default board.
+        boards #        Make board number # the default board.
         boards NAME     Make board NAME the default board.
         """
         try:
@@ -481,7 +481,7 @@ class Shell(cmd.Cmd):
         except ValueError:
             self.devs.default_device(name=line)
         rows = []
-        rows.append(("ID", "Name", "Port/IP", "Status", "Dirs"))
+        rows.append(("#", "Name", "Port/IP", "Unique ID", "Directories"))
         for index, dev in enumerate(self.devs.devices()):
             name = dev.name()
             if not name:
@@ -496,7 +496,7 @@ class Shell(cmd.Cmd):
             dirs = ', '.join(dirs)
             default = '*' if dev is self.devs.default_device() else ''
             rows.append((default + str(index + 1), name,
-                         dev.address(), dev.status(), dirs))
+                         dev.address(), dev.get_id(), dirs))
         if len(rows) > 1:
             column_print('><<< ', rows, self.print)
         else:

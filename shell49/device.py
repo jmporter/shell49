@@ -9,7 +9,6 @@ import time
 import serial
 import os
 import socket
-import uuid
 
 
 class DeviceError(Exception):
@@ -24,11 +23,11 @@ class Device(object):
         self.has_buffer = False  # needs to be set for remote_eval to work
         self.root_dirs = []
         self.pyb = None
-        self.id = 'default'
+        self.id = 'no unique id'
 
     def _set_pyb(self, pyb):
         self.pyb = pyb
-        self.id = self.remote_eval(get_unique_id, uuid.uuid4().hex[:6].upper())
+        self.id = self.remote_eval(get_unique_id, self.id)
         qprint("Connected to '{}' (id={}), synchonizing time ...".format(
             self.name(), self.id))
         self.has_buffer = self.remote_eval(test_buffer)
@@ -195,14 +194,6 @@ class Device(object):
         self.pyb.exit_raw_repl()
         print(repr(res))
         return res
-
-    def status(self):
-        """Returns a status string to indicate whether we're connected to
-           the pyboard or not.
-        """
-        if self.pyb is None:
-            return 'closed'
-        return 'connected'
 
     def sync_time(self):
         """Sets the time on the pyboard to match the time on the host."""
