@@ -30,7 +30,7 @@ class _Getch:
 
 class _GetchUnix:
     def __init__(self):
-        # import tty, sys
+        import tty, sys
         pass
 
     def __call__(self):
@@ -49,7 +49,7 @@ class _GetchUnix:
 
 class _GetchWindows:
     def __init__(self):
-        # import msvcrt
+        import msvcrt
         pass
 
     def __call__(self):
