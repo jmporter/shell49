@@ -78,6 +78,9 @@ class Device(object):
             self.pyb.serial.close()
         self.pyb = None
 
+    def connected(self):
+        return self.pyb != None
+
     def is_root_path(self, filename):
         """Determines if 'filename' corresponds to a directory on this device."""
         test_filename = filename + '/'
@@ -162,7 +165,7 @@ class Device(object):
         res = self.remote(func, *args, **kwargs)
         try:
             return eval(res)
-        except Exception as e:
+        except (SyntaxError, ValueError) as e:
             eprint("*** remote_eval({}, {}, {}) -> \n{} is not valid python code".format(
                 func.__name__, args, kwargs, res))
             return None
@@ -200,9 +203,6 @@ class Device(object):
         if self.pyb is None:
             return 'closed'
         return 'connected'
-
-    def connected(self):
-        return self.pyb is not None
 
     def sync_time(self):
         """Sets the time on the pyboard to match the time on the host."""

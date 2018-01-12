@@ -19,7 +19,7 @@ class Devs:
         """Set/get default device id"""
         if index:
             try:
-                if self._devices[index - 1]:
+                if self.devices()[index - 1]:
                     self._default_dev = self._devices[index - 1]
             except:
                 pass
@@ -31,13 +31,15 @@ class Devs:
 
     def devices(self):
         """Iterate over all devices"""
+        # remove devices that are disconnected
+        self._devices = filter(lambda dev: not dev.connected(), self._devices)
         for dev in self._devices:
             if dev:
                 yield dev
 
     def find_device_by_name(self, name):
         """Find board by name."""
-        for d in self._devices:
+        for d in self.devices():
             if d.name() == name:
                 return d
         return self._default_dev
@@ -51,21 +53,21 @@ class Devs:
 
     def find_serial_device_by_port(self, port):
         """Find board by port name."""
-        for dev in self._devices:
+        for dev in self.devices():
             if dev.is_serial_port(port):
                 return dev
         return None
 
     def find_telnet_device_by_ip(self, ip):
         """Find board by ip address."""
-        for dev in self._devices:
+        for dev in self.devices():
             if dev.is_telnet_ip(ip):
                 return dev
         return None
 
     def num_devices(self):
         """Number of connected devices"""
-        return sum(x is not None for x in self._devices)
+        return sum(x is not None for x in self.devices())
 
     def connect_serial(self, port, baudrate=None):
         """Connect to MicroPython board plugged into the specfied port."""
@@ -103,7 +105,7 @@ class Devs:
         if self._default_dev and self._default_dev.is_root_path(filename):
             return (self._default_dev, filename)
         test_filename = filename + '/'
-        for dev in self._devices:
+        for dev in self.devices():
             if dev.name() and test_filename.startswith('/' + dev.name()):
                 dev_filename = filename[len(dev.name()) + 1:]
                 if dev_filename == '':
