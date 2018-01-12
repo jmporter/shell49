@@ -1,8 +1,5 @@
-from . device import DeviceSerial, DeviceNet, DeviceError
-from . config import Config
-from . print_ import oprint, qprint, eprint, dprint
-
-from collections import OrderedDict
+from . device import DeviceSerial, DeviceNet
+from . print_ import qprint
 
 
 class DevsError(Exception):
@@ -18,12 +15,12 @@ class Devs:
         self._default_dev = None
         self.config = config
 
-
     def default_device(self, index=None, name=None):
         """Set/get default device id"""
         if index:
             try:
-                if self._devices[index-1]: self._default_dev = self._devices[index-1]
+                if self._devices[index - 1]:
+                    self._default_dev = self._devices[index - 1]
             except:
                 pass
         if name:
@@ -32,27 +29,25 @@ class Devs:
             raise DevsError("no board connected")
         return self._default_dev
 
-
     def devices(self):
         """Iterate over all devices"""
         for dev in self._devices:
             if dev:
                 yield dev
 
-
     def find_device_by_name(self, name):
         """Find board by name."""
         for d in self._devices:
-            if d.name() == name: return d
+            if d.name() == name:
+                return d
         return self._default_dev
-
 
     def is_connected(self, name):
         """Return True if board with specified name is already connected."""
         for d in self._devices:
-            if d.name() == name: return True
+            if d.name() == name:
+                return True
         return False
-
 
     def find_serial_device_by_port(self, port):
         """Find board by port name."""
@@ -61,7 +56,6 @@ class Devs:
                 return dev
         return None
 
-
     def find_telnet_device_by_ip(self, ip):
         """Find board by ip address."""
         for dev in self._devices:
@@ -69,11 +63,9 @@ class Devs:
                 return dev
         return None
 
-
     def num_devices(self):
         """Number of connected devices"""
         return sum(x is not None for x in self._devices)
-
 
     def connect_serial(self, port, baudrate=None):
         """Connect to MicroPython board plugged into the specfied port."""
@@ -83,20 +75,17 @@ class Devs:
         dev = DeviceSerial(self.config, port, baudrate)
         self.add_device(dev)
 
-
     def connect_telnet(self, ip_address):
         """Connect to MicroPython board at specified IP address."""
         qprint("Connecting via telnet to '{}' ...".format(ip_address))
         dev = DeviceNet(self.config, ip_address)
         self.add_device(dev)
 
-
     def add_device(self, dev):
         """Adds a device to the list of devices we know about and make it the new default."""
         if dev.connected():
             self._devices.append(dev)
             self._default_dev = dev
-
 
     def get_dev_and_path(self, filename):
         """Determines if a given file is located locally or remotely. We assume
@@ -116,7 +105,7 @@ class Devs:
         test_filename = filename + '/'
         for dev in self._devices:
             if dev.name() and test_filename.startswith('/' + dev.name()):
-                dev_filename = filename[len(dev.name())+1:]
+                dev_filename = filename[len(dev.name()) + 1:]
                 if dev_filename == '':
                     dev_filename = '/'
                 return (dev, dev_filename)

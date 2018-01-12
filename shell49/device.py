@@ -1,7 +1,7 @@
 from . print_ import qprint, dprint, eprint
 from . pyboard import Pyboard, PyboardError
-from . remote_op import listdir, remote_repr, set_time, epoch, \
-    osdebug, board_name, test_buffer, get_unique_id
+from . remote_op import listdir, remote_repr, set_time, \
+    osdebug, test_buffer, get_unique_id
 import shell49.remote_op as remote_op
 
 import inspect
@@ -26,68 +26,57 @@ class Device(object):
         self.pyb = None
         self.id = 'default'
 
-
     def _set_pyb(self, pyb):
         self.pyb = pyb
         self.id = self.remote_eval(get_unique_id, uuid.uuid4().hex[:6].upper())
-        qprint("Connected to '{}' (id={}), synchonizing time ...".format(self.name(), self.id))
+        qprint("Connected to '{}' (id={}), synchonizing time ...".format(
+            self.name(), self.id))
         self.has_buffer = self.remote_eval(test_buffer)
         dprint("find has_buffer", self.has_buffer)
-        self.root_dirs = ['/{}/'.format(dir) for dir in self.remote_eval(listdir, '/')]
+        self.root_dirs = ['/{}/'.format(dir)
+                          for dir in self.remote_eval(listdir, '/')]
         dprint("root_dirs", self.root_dirs)
         self.sync_time()
         dprint("synced time")
         # self.esp_osdebug(None)
 
-
     def get_id(self):
         return self.id
-
 
     def get(self, option, default=None):
         return self.config.get(self.id, option, default=default)
 
-
     def name(self):
         return self.config.get(self.id, 'name', 'nameless board')
-
 
     def set(self, option, value):
         self.config.set(self.id, option, value)
 
-
     def remove_option(self, name):
         self.config.remove(self.id, name)
-
 
     def options(self):
         return self.config.options(self.id)
 
-
     def config_string(self):
         return self.config.config_string(self.id)
-
 
     def address(self):
         raise DeviceError("Device.address called - Device is abstract class")
 
-
     def name_path(self):
         return '/{}/'.format(self.name())
-
 
     def check_pyb(self):
         """Raises an error if the pyb object was closed."""
         if self.pyb is None:
             raise DeviceError('serial port %s closed' % self.address())
 
-
     def close(self):
         """Closes the serial port."""
         if self.pyb and self.pyb.serial:
             self.pyb.serial.close()
         self.pyb = None
-
 
     def is_root_path(self, filename):
         """Determines if 'filename' corresponds to a directory on this device."""
@@ -97,22 +86,17 @@ class Device(object):
                 return True
         return False
 
-
     def root_directories(self):
         return self.root_dirs
-
 
     def is_serial_port(self, port):
         return False
 
-
     def is_telnet_ip(self, ip):
         return False
 
-
     def is_telnet(self):
         return False
-
 
     def read(self, num_bytes):
         """Reads data from the pyboard over the serial port."""
@@ -124,7 +108,6 @@ class Device(object):
             self.close()
             raise DeviceError('serial port %s closed' % self.address())
 
-
     def remote(self, func, *args, xfer_func=None, **kwargs):
         """Calls func with the indicated args on the micropython board."""
         time_offset = self.get('time_offset', default=946684800)
@@ -133,8 +116,10 @@ class Device(object):
         buffer_size = self.get('buffer_size', default=128)
         remote_op.BUFFER_SIZE = buffer_size
         has_buffer = self.has_buffer
+        remote_op.HAS_BUFFER = has_buffer
         args_arr = [remote_repr(i) for i in args]
-        kwargs_arr = ["{}={}".format(k, remote_repr(v)) for k, v in kwargs.items()]
+        kwargs_arr = ["{}={}".format(k, remote_repr(v))
+                      for k, v in kwargs.items()]
         func_str = inspect.getsource(func)
         func_str += 'output = ' + func.__name__ + '('
         func_str += ', '.join(args_arr + kwargs_arr)
@@ -147,7 +132,8 @@ class Device(object):
         func_str = func_str.replace('HAS_BUFFER', '{}'.format(has_buffer))
         func_str = func_str.replace('BUFFER_SIZE', '{}'.format(buffer_size))
         func_str = func_str.replace('IS_UPY', 'True')
-        dprint('----- About to send %d bytes of code to the pyboard -----' % len(func_str))
+        dprint('----- About to send %d bytes of code to the pyboard -----' %
+               len(func_str))
         dprint(func_str)
         dprint('-----')
         self.check_pyb()
@@ -169,7 +155,6 @@ class Device(object):
         dprint('-----')
         return output
 
-
     def remote_eval(self, func, *args, **kwargs):
         """Calls func with the indicated args on the micropython board, and
            converts the response back into python by using eval.
@@ -178,9 +163,9 @@ class Device(object):
         try:
             return eval(res)
         except Exception as e:
-            eprint("*** remote_eval({}, {}, {}) -> \n{} is not valid python code".format(func.__name__, args, kwargs, res))
+            eprint("*** remote_eval({}, {}, {}) -> \n{} is not valid python code".format(
+                func.__name__, args, kwargs, res))
             return None
-
 
     def execfile(self, file):
         """Transfers file to board and runs it."""
@@ -192,7 +177,6 @@ class Device(object):
         except Exception as ex:
             eprint("*** ", ex)
 
-
     def runfile(self, file):
         """Transfers file to board and runs it."""
         try:
@@ -202,14 +186,12 @@ class Device(object):
         except Exception as ex:
             eprint("*** ", ex)
 
-
     def exec(self, code):
         self.pyb.enter_raw_repl()
         res = self.pyb.exec(code)
         self.pyb.exit_raw_repl()
         print(repr(res))
         return res
-
 
     def status(self):
         """Returns a status string to indicate whether we're connected to
@@ -219,25 +201,21 @@ class Device(object):
             return 'closed'
         return 'connected'
 
-
     def connected(self):
         return self.pyb is not None
-
 
     def sync_time(self):
         """Sets the time on the pyboard to match the time on the host."""
         now = time.localtime(time.time())
         self.remote(set_time, now.tm_year, now.tm_mon, now.tm_mday,
-                              now.tm_hour, now.tm_min, now.tm_sec)
+                    now.tm_hour, now.tm_min, now.tm_sec)
         # determine actual time offset
         # dt = time.time() - float(self.remote(epoch))
         # eprint("TIME_OFFSET is", int(dt))
 
-
     def esp_osdebug(self, level=None):
         """Sets esp.osdebug on ESP32."""
         return self.remote(osdebug, level)
-
 
     def write(self, buf):
         """Writes data to the pyboard over the serial port."""
@@ -260,15 +238,14 @@ class DeviceSerial(Device):
         if wait and not os.path.exists(port):
             toggle = False
             try:
-                sys.stdout.write("Waiting %d seconds for serial port '%s' to exist" % (wait, self.port))
-                sys.stdout.flush()
+                qprint(
+                    "Waiting %d seconds for serial port '%s' to exist" % (wait, self.port), end='')
                 while wait and not os.path.exists(self.port):
-                    sys.stdout.write('.')
-                    sys.stdout.flush()
+                    qprint('.', end='')
                     time.sleep(0.5)
                     toggle = not toggle
-                    wait = wait if not toggle else wait -1
-                sys.stdout.write("\n")
+                    wait = wait if not toggle else wait - 1
+                qprint()
             except KeyboardInterrupt:
                 raise DeviceError('Interrupted')
 
@@ -291,7 +268,7 @@ class DeviceSerial(Device):
         except serial.serialutil.SerialException:
             # Write failed. Now report that we're waiting and keep trying until
             # a write succeeds
-            sys.stdout.write("Waiting for transport to be connected.")
+            qprint("Waiting for transport to be connected.", end='')
             while True:
                 time.sleep(0.5)
                 try:
@@ -299,9 +276,8 @@ class DeviceSerial(Device):
                     break
                 except serial.serialutil.SerialException:
                     pass
-                sys.stdout.write('.')
-                sys.stdout.flush()
-            sys.stdout.write('\n')
+                qprint('.', end='')
+            qprint()
 
         # In theory the serial port is now ready to use
         super()._set_pyb(pyb)

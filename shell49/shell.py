@@ -1,6 +1,6 @@
 from . print_ import dprint, eprint, oprint, qprint, cprint
 import shell49.print_ as print_
-from . config import Config, ConfigError
+from . config import ConfigError
 from . device import DeviceError
 from . devs import DevsError
 from . pyboard import PyboardError
@@ -9,7 +9,7 @@ from . remote_op import is_pattern, resolve_path, auto, get_mode, mode_isdir, \
     decorated_filename, print_cols, mode_isfile, cat, column_print, \
     get_ip_address, get_mac_address, get_time, set_time, osdebug, get_filesize, \
     cp, rsync, mkdir, rm, process_pattern, print_long, trim, unescape, \
-    listdir_matches, escape, validate_pattern, get_unique_id
+    listdir_matches, escape, validate_pattern, get_unique_id, recv_file_from_host, send_file_to_remote
 from . getch import getch
 from . mdns_client import MdnsListenter
 from . flasher import Flasher, FlasherError
@@ -20,7 +20,7 @@ import argparse
 import cmd
 import sys
 import os
-import io
+import glob
 import time
 import shutil
 import shlex
@@ -28,6 +28,7 @@ import readline
 import itertools
 import fnmatch
 import threading
+import tempfile
 import traceback
 import serial
 
@@ -62,7 +63,7 @@ FAKE_INPUT_PROMPT = False
 if sys.platform == 'darwin':
     # The readline that comes with OSX screws up colors in the prompt
     # BEB - not my mac / not my python
-    FAKE_INPUT_PROMPT = False # True
+    FAKE_INPUT_PROMPT = False  # True
 
 QUIT_REPL_CHAR = 'X'
 QUIT_REPL_BYTE = bytes((ord(QUIT_REPL_CHAR) - ord('@'),))  # Control-X
@@ -147,7 +148,8 @@ class Shell(cmd.Cmd):
         self.line_num = 0
         self.timing = timing
 
-        self.cur_dir = os.path.expanduser(config.get(0, 'host_dir', os.getcwd()))
+        self.cur_dir = os.path.expanduser(
+            config.get(0, 'host_dir', os.getcwd()))
         self.prev_dir = self.cur_dir
         self.columns = shutil.get_terminal_size().columns
 
@@ -249,6 +251,7 @@ class Shell(cmd.Cmd):
 
         """
         pass
+
     def precmd(self, line):
         self.stdout = self.smart_stdout
         return line
@@ -258,7 +261,8 @@ class Shell(cmd.Cmd):
             if self.redirect_dev is not None:
                 # Redirecting to a remote device, now that we're finished the
                 # command, we can copy the collected output to the remote.
-                dprint('Copy redirected output to "%s"' % self.redirect_filename)
+                dprint('Copy redirected output to "%s"' %
+                       self.redirect_filename)
                 # This belongs on the remote. Copy/append now
                 filesize = self.stdout.tell()
                 self.stdout.seek(0)
@@ -286,11 +290,12 @@ class Shell(cmd.Cmd):
             argparse_args = getattr(self, "argparse_" + command)
         except AttributeError:
             return None
-        doc_lines = getattr(self, "do_" + command).__doc__.expandtabs().splitlines()
+        doc_lines = getattr(
+            self, "do_" + command).__doc__.expandtabs().splitlines()
         if '' in doc_lines:
             blank_idx = doc_lines.index('')
             usage = doc_lines[:blank_idx]
-            description = doc_lines[blank_idx+1:]
+            description = doc_lines[blank_idx + 1:]
         else:
             usage = doc_lines
             description = []
@@ -338,8 +343,10 @@ class Shell(cmd.Cmd):
         # When we return a list of completions, the bit that we return should
         # just be the portion that we replace 'text' with.
 
-        fixed = unescape(line[before_match+1:begidx]) # fixed portion of the match
-        match = unescape(line[before_match+1:endidx]) # portion to match filenames against
+        # fixed portion of the match
+        fixed = unescape(line[before_match + 1:begidx])
+        # portion to match filenames against
+        match = unescape(line[before_match + 1:endidx])
 
         # We do the following to cover the case that the current directory
         # is / and the path being entered is relative.
@@ -358,16 +365,20 @@ class Shell(cmd.Cmd):
             # So we'll supply the matching board names as possible completions.
             # Since they're all treated as directories we leave the trailing slash.
             if match[0] == '/':
-                completions += [dev.name_path() for dev in self.devs.devices() if dev.name_path().startswith(abs_match)]
+                completions += [dev.name_path() for dev in self.devs.devices()
+                                if dev.name_path().startswith(abs_match)]
             else:
-                completions += [dev.name_path()[1:] for dev in self.devs.devices() if dev.name_path().startswith(abs_match)]
+                completions += [dev.name_path()[1:] for dev in self.devs.devices()
+                                if dev.name_path().startswith(abs_match)]
             try:
                 # Add root directories of the default device
                 def_dev = self.devs.default_device()
                 if match[0] == '/':
-                    completions += [root_dir for root_dir in def_dev.root_dirs if root_dir.startswith(match)]
+                    completions += [
+                        root_dir for root_dir in def_dev.root_dirs if root_dir.startswith(match)]
                 else:
-                    completions += [root_dir[1:] for root_dir in def_dev.root_dirs if root_dir[1:].startswith(match)]
+                    completions += [root_dir[1:]
+                                    for root_dir in def_dev.root_dirs if root_dir[1:].startswith(match)]
             except DevsError:
                 pass
         else:
@@ -385,11 +396,9 @@ class Shell(cmd.Cmd):
             completions.append(escape(path.replace(fixed, '', 1)))
         return completions
 
-
     def directory_complete(self, text, line, begidx, endidx):
         """Figure out what directories match the completion."""
         return [filename for filename in self.filename_complete(text, line, begidx, endidx) if filename[-1] == '/']
-
 
     def line_to_args(self, line):
         """This will convert the line passed into the do_xxx functions into
@@ -406,8 +415,10 @@ class Shell(cmd.Cmd):
         if redirect_index >= 0:
             if redirect_index + 1 >= len(args):
                 raise ShellError("> requires a filename")
-            self.redirect_filename = resolve_path(self.cur_dir, args[redirect_index + 1])
-            rmode = auto(self.devs, self.devs, get_mode, os.path.dirname(self.redirect_filename))
+            self.redirect_filename = resolve_path(
+                self.cur_dir, args[redirect_index + 1])
+            rmode = auto(self.devs, self.devs, get_mode,
+                         os.path.dirname(self.redirect_filename))
             if not mode_isdir(rmode):
                 raise ShellError("Unable to redirect to '%s', directory doesn't exist" %
                                  self.redirect_filename)
@@ -417,10 +428,12 @@ class Shell(cmd.Cmd):
             else:
                 self.redirect_mode = 'a'
                 dprint('Redirecting (append) to', self.redirect_filename)
-            self.redirect_dev, self.redirect_filename = self.devs.get_dev_and_path(self.redirect_filename)
+            self.redirect_dev, self.redirect_filename = self.devs.get_dev_and_path(
+                self.redirect_filename)
             try:
                 if self.redirect_dev is None:
-                    self.stdout = SmartFile(open(self.redirect_filename, self.redirect_mode))
+                    self.stdout = SmartFile(
+                        open(self.redirect_filename, self.redirect_mode))
                 else:
                     # Redirecting to a remote device. We collect the results locally
                     # and copy them to the remote device at the end of the command.
@@ -436,7 +449,6 @@ class Shell(cmd.Cmd):
             args = parser.parse_args(args)
         return args
 
-
     def do_args(self, line):
         """args [arguments...]
 
@@ -447,17 +459,17 @@ class Shell(cmd.Cmd):
         for idx in range(len(args)):
             self.print("arg[%d] = '%s'" % (idx, args[idx]))
 
-
     def do_mdns(self, line):
         """mdns
 
         List all MicroPython boards advertising repl telnet via mdns.
         """
         listener = MdnsListenter()
-        cprint("url                  ip               port   spec", color=print_.PY_COLOR)
+        cprint("url                  ip               port   spec",
+               color=print_.PY_COLOR)
         for b in listener.listen(seconds=1):
-            oprint("{:20s} {:14s}    {:2d}    {}".format(b.url, b.ip, b.port, b.spec))
-
+            oprint("{:20s} {:14s}    {:2d}    {}".format(
+                b.url, b.ip, b.port, b.spec))
 
     def do_boards(self, line):
         """boards          List connected devices.
@@ -472,21 +484,23 @@ class Shell(cmd.Cmd):
         rows.append(("ID", "Name", "Port/IP", "Status", "Dirs"))
         for index, dev in enumerate(self.devs.devices()):
             name = dev.name()
-            if not name: name = '-'
+            if not name:
+                name = '-'
             if dev is self.devs.default_device():
                 dirs = [dir[:-1] for dir in dev.root_directories()]
             else:
                 dirs = []
             if dev.name():
-                dirs += ['/{}{}'.format(name, dir)[:-1] for dir in dev.root_directories()]
+                dirs += ['/{}{}'.format(name, dir)[:-1]
+                         for dir in dev.root_directories()]
             dirs = ', '.join(dirs)
             default = '*' if dev is self.devs.default_device() else ''
-            rows.append((default+str(index+1), name, dev.address(), dev.status(), dirs))
+            rows.append((default + str(index + 1), name,
+                         dev.address(), dev.status(), dirs))
         if len(rows) > 1:
             column_print('><<< ', rows, self.print)
         else:
             print('No boards connected')
-
 
     argparse_config = (
         add_arg(
@@ -524,13 +538,11 @@ class Shell(cmd.Cmd):
         ),
     )
 
-
-    def print_config(self, id, *, exc = {}, color=print_.OUTPUT_COLOR):
+    def print_config(self, id, *, exc={}, color=print_.OUTPUT_COLOR):
         for k in self.config.options(id):
             if not k in exc:
                 v = self.config.get(id, k)
                 cprint("{:>20s} = {}".format(k, v), color=color)
-
 
     def do_config(self, line):
         """config                                   Print option values of default board.
@@ -546,7 +558,8 @@ class Shell(cmd.Cmd):
         if line == '':
             keys = def_dev.options()
             if not 'name' in keys:
-                eprint("WARNING: board has no 'name' attribute. Assign with 'config -u name ...'.")
+                eprint(
+                    "WARNING: board has no 'name' attribute. Assign with 'config -u name ...'.")
             self.print_config(def_dev.get_id(), color=print_.PY_COLOR)
             oprint("Defaults:")
             self.print_config('default', exc=keys)
@@ -575,10 +588,10 @@ class Shell(cmd.Cmd):
                 for key in def_dev.options():
                     print("{} = {}".format(key, repr(def_dev.get(key))), file=f)
                 f.close()
-                dst = os.path.join(def_dev.get('remote_dir', '/flash'), 'config.py')
+                dst = os.path.join(def_dev.get(
+                    'remote_dir', '/flash'), 'config.py')
                 cp(self.devs, temp.name, dst)
                 os.unlink(temp.name)
-
 
     argparse_flash = (
         add_arg(
@@ -609,7 +622,6 @@ class Shell(cmd.Cmd):
         ),
     )
 
-
     def do_flash(self, line):
         """flash [-l|--list] [-e|--erase] [-v|--version VERSION] [-b|--board BOARD]
 
@@ -619,8 +631,8 @@ class Shell(cmd.Cmd):
         args = self.line_to_args(line)
         firmware_url = "https://people.eecs.berkeley.edu/~boser/iot49/firmware"
         flash_options = "--chip esp32 " \
-          "--before default_reset --after hard_reset " \
-          "write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect"
+            "--before default_reset --after hard_reset " \
+            "write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect"
         id = 0
         try:
             id = self.devs.default_device().get_id()
@@ -631,7 +643,8 @@ class Shell(cmd.Cmd):
         port = self.config.get(id, "port", "/dev/cu.SLAB_USBtoUART")
         baudrate = self.config.get(id, "flash_baudrate", 921600)
         board = self.config.get(id, "board", "HUZZAH32")
-        if args.board: board = args.board
+        if args.board:
+            board = args.board
 
         dprint("firmware url: ", firmware_url)
         dprint("flash options:", flash_options)
@@ -643,18 +656,18 @@ class Shell(cmd.Cmd):
             f = Flasher(board=board, url=firmware_url)
             if args.list:
                 oprint("available firmware versions:")
-                oprint('\n'.join([ "  {:8s} {}".format(v, d) for v, d in f.versions()]))
+                oprint('\n'.join(["  {:8s} {}".format(v, d)
+                                  for v, d in f.versions()]))
                 return
             if args.erase:
                 f.erase_flash(port)
-            f.flash(args.version, flash_options=flash_options, port=port, baudrate=baudrate)
+            f.flash(args.version, flash_options=flash_options,
+                    port=port, baudrate=baudrate)
         except FlasherError as e:
             eprint(e)
 
-
     def complete_cat(self, text, line, begidx, endidx):
         return self.filename_complete(text, line, begidx, endidx)
-
 
     def do_cat(self, line):
         """cat FILENAME...
@@ -676,10 +689,8 @@ class Shell(cmd.Cmd):
                 continue
             cat(self.devs, filename, self.stdout)
 
-
     def complete_cd(self, text, line, begidx, endidx):
         return self.directory_complete(text, line, begidx, endidx)
-
 
     def do_cd(self, line):
         """cd DIRECTORY
@@ -705,6 +716,40 @@ class Shell(cmd.Cmd):
         else:
             eprint("Directory '%s' does not exist" % dirname)
 
+    def serial_ports(self):
+        """ Lists serial port names
+
+            :raises EnvironmentError:
+                On unsupported or unknown platforms
+            :returns:
+                A list of the serial ports available on the system
+        """
+        if sys.platform.startswith('win'):
+            ports = ['COM%s' % (i + 1) for i in range(256)]
+        elif sys.platform.startswith('linux') or sys.platform.startswith('cygwin'):
+            # this excludes your current terminal "/dev/tty"
+            ports = glob.glob('/dev/tty[A-Za-z]*')
+        elif sys.platform.startswith('darwin'):
+            ports = glob.glob('/dev/tty.*')
+        else:
+            raise EnvironmentError('Unsupported platform')
+
+        result = []
+        for port in ports:
+            try:
+                s = serial.Serial(port)
+                s.close()
+                result.append(port)
+            except (OSError, serial.SerialException):
+                pass
+        return result
+
+    def do_ports(self, line):
+        for port in self.serial_ports():
+            if 'USB' in port:
+                oprint(port)
+            else:
+                qprint(port)
 
     def do_connect(self, line):
         """connect TYPE TYPE_PARAMS       Connect boards to shell49.
@@ -722,8 +767,10 @@ class Shell(cmd.Cmd):
             return
         connect_type = args[0]
         if connect_type == 'serial':
-            port = args[1] if len(args) > 1 else self.config.get(0, 'port', '/dev/cu.SLAB_USBtoUART')
-            baud = args[2] if len(args) > 2 else self.config.get(0, 'baudrate', '115200')
+            port = args[1] if len(args) > 1 else self.config.get(
+                0, 'port', '/dev/cu.SLAB_USBtoUART')
+            baud = args[2] if len(args) > 2 else self.config.get(
+                0, 'baudrate', '115200')
             try:
                 baud = int(baud)
             except ValueError:
@@ -755,10 +802,8 @@ class Shell(cmd.Cmd):
         else:
             eprint('Unrecognized connection TYPE: {}'.format(connect_type))
 
-
     def complete_cp(self, text, line, begidx, endidx):
         return self.filename_complete(text, line, begidx, endidx)
-
 
     def do_cp(self, line):
         """cp SOURCE DEST               Copy a single SOURCE file to DEST file.
@@ -809,7 +854,7 @@ class Shell(cmd.Cmd):
                 eprint("File '{}' doesn't exist".format(src_filename))
                 return
             if mode_isdir(src_mode):
-                if args.recursive: # Copying a directory
+                if args.recursive:  # Copying a directory
                     src_basename = os.path.basename(src_filename)
                     dst_filename = os.path.join(dst_dirname, src_basename)
                     if src_basename in d_dst:
@@ -831,14 +876,14 @@ class Shell(cmd.Cmd):
                     eprint("Omitting directory {}".format(src_filename))
                 continue
             if mode_isdir(dst_mode):
-                dst_filename = os.path.join(dst_dirname, os.path.basename(src_filename))
+                dst_filename = os.path.join(
+                    dst_dirname, os.path.basename(src_filename))
             else:
                 dst_filename = dst_dirname
             if not cp(self.devs, src_filename, dst_filename):
                 err = "Unable to copy '{}' to '{}'"
                 eprint(err.format(src_filename, dst_filename))
                 break
-
 
     def do_echo(self, line):
         """echo TEXT...
@@ -848,10 +893,8 @@ class Shell(cmd.Cmd):
         args = self.line_to_args(line)
         self.print(*args)
 
-
     def complete_edit(self, text, line, begidx, endidx):
         return self.filename_complete(text, line, begidx, endidx)
-
 
     def do_edit(self, line):
         """edit FILE
@@ -880,7 +923,8 @@ class Shell(cmd.Cmd):
         else:
             # File is remote
             with tempfile.TemporaryDirectory() as temp_dir:
-                local_filename = os.path.join(temp_dir, os.path.basename(filename))
+                local_filename = os.path.join(
+                    temp_dir, os.path.basename(filename))
                 if mode_exists(mode):
                     print('Retrieving {} ...'.format(filename))
                     cp(filename, local_filename)
@@ -891,10 +935,8 @@ class Shell(cmd.Cmd):
                     self.print('Updating {} ...'.format(filename))
                     cp(local_filename, filename)
 
-
     def complete_filesize(self, text, line, begidx, endidx):
         return self.filename_complete(text, line, begidx, endidx)
-
 
     def do_filesize(self, line):
         """filesize FILE
@@ -908,10 +950,8 @@ class Shell(cmd.Cmd):
         filename = resolve_path(self.cur_dir, line)
         self.print(auto(self.devs, get_filesize, filename))
 
-
     def complete_filetype(self, text, line, begidx, endidx):
         return self.filename_complete(text, line, begidx, endidx)
-
 
     def do_filetype(self, line):
         """filetype FILE
@@ -933,7 +973,6 @@ class Shell(cmd.Cmd):
                 self.print('unknown')
         else:
             self.print('missing')
-
 
     def do_help(self, line):
         """help [COMMAND]
@@ -966,11 +1005,11 @@ class Shell(cmd.Cmd):
                 for k in dir(self):
                     if k.startswith('do_'):
                         doc = getattr(self, k).__doc__
-                        self.print("-- help for {} {}\n".format(k[3:], '-'*(64-len(k))))
+                        self.print(
+                            "-- help for {} {}\n".format(k[3:], '-' * (64 - len(k))))
                         self.print("{}\n\n".format(trim(doc)))
             else:
                 self.print(str(self.nohelp % (line,)))
-
 
     argparse_ls = (
         add_arg(
@@ -995,10 +1034,8 @@ class Shell(cmd.Cmd):
         ),
     )
 
-
     def complete_ls(self, text, line, begidx, endidx):
         return self.filename_complete(text, line, begidx, endidx)
-
 
     def do_ls(self, line):
         """ls [-a] [-l] [FILE|DIRECTORY|PATTERN]...
@@ -1029,9 +1066,10 @@ class Shell(cmd.Cmd):
                         self.print('')
                     self.print("%s:" % filename)
                 pattern = '*'
-            else: # A pattern was specified
-                filename, pattern = validate_pattern(self.devs, self.cur_dir, fn)
-                if filename is None: # An error was printed
+            else:  # A pattern was specified
+                filename, pattern = validate_pattern(
+                    self.devs, self.cur_dir, fn)
+                if filename is None:  # An error was printed
                     continue
             files = []
             ldir_stat = auto(self.devs, listdir_stat, filename)
@@ -1046,14 +1084,13 @@ class Shell(cmd.Cmd):
                             if args.long:
                                 print_long(filename, stat, self.print)
                             else:
-                                files.append(decorated_filename(filename, stat))
+                                files.append(
+                                    decorated_filename(filename, stat))
             if len(files) > 0:
                 print_cols(sorted(files), self.print, self.columns)
 
-
     def complete_mkdir(self, text, line, begidx, endidx):
         return self.filename_complete(text, line, begidx, endidx)
-
 
     def do_mkdir(self, line):
         """mkdir DIRECTORY...
@@ -1065,7 +1102,6 @@ class Shell(cmd.Cmd):
             filename = resolve_path(self.cur_dir, filename)
             if not mkdir(self.devs, filename):
                 eprint('Unable to create %s' % filename)
-
 
     def repl_serial_to_stdout(self, dev):
         """Runs as a thread which has a sole purpose of reading bytes from
@@ -1106,7 +1142,6 @@ class Shell(cmd.Cmd):
                 # The device is no longer present.
                 return
 
-
     def do_repl(self, line):
         """repl [board-name] [~ line [~]]
 
@@ -1139,7 +1174,8 @@ class Shell(cmd.Cmd):
         self.quit_serial_reader = False
         self.quit_when_no_output = False
         self.serial_reader_running = AutoBool()
-        repl_thread = threading.Thread(target=self.repl_serial_to_stdout, args=(dev,), name='REPL_serial_to_stdout')
+        repl_thread = threading.Thread(
+            target=self.repl_serial_to_stdout, args=(dev,), name='REPL_serial_to_stdout')
         repl_thread.daemon = True
         repl_thread.start()
         # Wait for reader to start
@@ -1190,7 +1226,6 @@ class Shell(cmd.Cmd):
         repl_thread.join()
         self.print(print_.END_COLOR)
 
-
     argparse_cp = (
         add_arg(
             '-r', '--recursive',
@@ -1206,7 +1241,6 @@ class Shell(cmd.Cmd):
             help='Pattern or files and directories to copy'
         ),
     )
-
 
     argparse_rm = (
         add_arg(
@@ -1231,10 +1265,8 @@ class Shell(cmd.Cmd):
         ),
     )
 
-
     def complete_rm(self, text, line, begidx, endidx):
         return self.filename_complete(text, line, begidx, endidx)
-
 
     def do_rm(self, line):
         """rm [-f|--force] FILE...            Remove one or more files
@@ -1264,7 +1296,6 @@ class Shell(cmd.Cmd):
                 if not args.force:
                     eprint("Unable to remove '{}'".format(filename))
                 break
-
 
     def do_shell(self, line):
         """!some-shell-command args
@@ -1304,7 +1335,6 @@ class Shell(cmd.Cmd):
         )
     )
 
-
     def do_rsync(self, line):
         """rsync [-m|--mirror] [-n|--dry-run] [SRC_DIR [DEST_DIR]]
 
@@ -1325,8 +1355,7 @@ class Shell(cmd.Cmd):
         if len(sd) < 2:
             qprint("synchronizing {} --> {}".format(src_dir, dst_dir))
         rsync(self.devs, src_dir, dst_dir,
-            mirror=args.mirror, dry_run=args.dry_run, recursed=True)
-
+              mirror=args.mirror, dry_run=args.dry_run, recursed=True)
 
     def do_run(self, line):
         """run [FILE]
@@ -1356,7 +1385,6 @@ class Shell(cmd.Cmd):
         except PyboardError as err:
             eprint("*** Syntax:", str(err))
 
-
     def do_time(self, line):
         """time [now]
 
@@ -1367,33 +1395,33 @@ class Shell(cmd.Cmd):
         if 'now' in line:
             now = time.localtime(time.time())
             self.devs.default_device().remote(set_time, now.tm_year, now.tm_mon, now.tm_mday,
-                                   now.tm_hour, now.tm_min, now.tm_sec)
-        oprint(self.devs.default_device().remote(get_time).decode('utf-8'), end='')
-
+                                              now.tm_hour, now.tm_min, now.tm_sec)
+        oprint(self.devs.default_device().remote(
+            get_time).decode('utf-8'), end='')
 
     def do_ip(self, line):
         """ip
 
         Inquire and print out IP address of micropython board.
         """
-        oprint(self.devs.default_device().remote(get_ip_address).decode('utf-8'), end='')
-
+        oprint(self.devs.default_device().remote(
+            get_ip_address).decode('utf-8'), end='')
 
     def do_mac(self, line):
         """mac
 
         Inquire and print out MAC address of micropython board.
         """
-        oprint(self.devs.default_device().remote(get_mac_address).decode('utf-8'), end='')
-
+        oprint(self.devs.default_device().remote(
+            get_mac_address).decode('utf-8'), end='')
 
     def do_id(self, line):
         """id
 
         Inquire board id (machine.unique_id()).
         """
-        oprint(self.devs.default_device().remote(get_unique_id, "none").decode('utf-8'), end='')
-
+        oprint(self.devs.default_device().remote(
+            get_unique_id, "none").decode('utf-8'), end='')
 
     def do_osdebug(self, line):
         """osdebug  [ none (default) | error | warning | info | debug | verbose ]
@@ -1401,10 +1429,11 @@ class Shell(cmd.Cmd):
         Sets debug level on ESP32. Does nothing on architectures that do not
         implement esp.osdebug().
         """
-        if line is '': line = 'none'
+        if line is '':
+            line = 'none'
         osdebug(line)
-        oprint("set debug level to {}".format(self.devs.default_device().esp_osdebug(line).decode('utf-8')), end='')
-
+        oprint("set debug level to {}".format(
+            self.devs.default_device().esp_osdebug(line).decode('utf-8')), end='')
 
     def do_debug(self, line):
         """debug [on|off]
@@ -1413,7 +1442,6 @@ class Shell(cmd.Cmd):
         """
         print_.DEBUG = 'on' in line
         oprint("Debug is {}".format('on' if print_.DEBUG else 'off'))
-
 
     def do_quiet(self, line):
         """quiet [on|off]

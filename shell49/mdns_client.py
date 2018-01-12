@@ -9,7 +9,6 @@ class MdnsListenter:
     def __init__(self):
         pass
 
-
     def listen(self, service="_repl._tcp.local.", seconds=5):
         """Listen for mDNS messages for specified time.
 
@@ -18,16 +17,14 @@ class MdnsListenter:
         self.devs = []
         try:
             zeroconf = Zeroconf()
-            browser = ServiceBrowser(zeroconf, "_repl._tcp.local.", self)
+            ServiceBrowser(zeroconf, "_repl._tcp.local.", self)
             time.sleep(seconds)
         finally:
             zeroconf.close()
         return self.devs
 
-
     def remove_service(self, zeroconf, type, name):
         pass
-
 
     def add_service(self, zeroconf, type, name):
         Service = namedtuple("Service", "hostname ip url port spec")
@@ -37,4 +34,5 @@ class MdnsListenter:
         port = info.port
         spec = info.name
         hostname = url[:url.find('.')]
-        self.devs.append(Service(hostname=hostname, ip=ip, url=url, port=port, spec=spec))
+        self.devs.append(Service(hostname=hostname, ip=ip,
+                                 url=url, port=port, spec=spec))

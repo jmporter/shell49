@@ -2,16 +2,11 @@
 
 from . print_ import qprint
 
-from urllib.request import Request, urlopen, urlretrieve
+from urllib.request import urlopen, urlretrieve
 from urllib.error import HTTPError
-from tempfile import NamedTemporaryFile, TemporaryDirectory
-from enum import Enum
-from html import unescape
-from pprint import pprint
+from tempfile import TemporaryDirectory
 from ast import literal_eval
-import urllib.parse
 import os
-import json
 
 
 class FlasherError(BaseException):
@@ -46,7 +41,8 @@ class Flasher:
             kwargs['port'],
             kwargs['baudrate'],
             kwargs['flash_options'],
-            ' '.join([ "0x{:x} {}".format(addr, file) for addr, file in self.spec['partitions'] ])
+            ' '.join(["0x{:x} {}".format(addr, file)
+                      for addr, file in self.spec['partitions']])
         )
         with TemporaryDirectory() as dir:
             os.chdir(dir)
@@ -65,6 +61,7 @@ class Flasher:
     def erase_flash(self, port):
         qprint("erasing flash ...")
         cmd = "esptool.py --port {} erase_flash".format(port)
+        os.system(cmd)
 
     def versions(self):
         """Return list of available firmware versions."""
@@ -75,14 +72,14 @@ if __name__ == "__main__":
     port = "/dev/cu.SLAB_USBtoUART"
     baud = 921600
     flash_options = "--chip esp32 " \
-      "--before default_reset --after hard_reset " \
-      "write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect "
+        "--before default_reset --after hard_reset " \
+        "write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect "
     version = "STABLE"
     board = "HUZZAH32"
     url = "https://people.eecs.berkeley.edu/~boser/iot49/firmware"
     f = Flasher(board=board, url=url)
     print("versions:")
-    print('\n'.join([ "{:8s} {}".format(v, d) for v, d in f.versions()]))
+    print('\n'.join(["{:8s} {}".format(v, d) for v, d in f.versions()]))
     print()
     f.erase_flash(port)
     print()

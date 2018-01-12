@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-from . print_ import cprint, qprint, eprint, dprint, oprint
+from . print_ import qprint, eprint, dprint, oprint
 
 from pprint import pprint
 from datetime import datetime
@@ -8,12 +8,14 @@ from ast import literal_eval
 import keyword
 import sys
 import os
-import io
+
 
 class ConfigError(Exception):
     """Errors relating to configuration file and manipulations"""
+
     def __init__(self, msg):
         super().__init__(msg)
+
 
 class Config:
     """Manage shell49 configuration file and values"""
@@ -27,15 +29,19 @@ class Config:
     def set(self, board_id, option, value):
         """Set board option parameter value. board_id = 0 is default entries."""
         dprint("config.set id={} {}={}".format(board_id, option, value))
-        if board_id == 0: board_id = 'default'
+        if board_id == 0:
+            board_id = 'default'
         if not option:
             return
         if not isinstance(option, str):
-            raise ConfigError("{}: expected str, got {!r}".format(option, type(option)))
+            raise ConfigError(
+                "{}: expected str, got {!r}".format(option, type(option)))
         if not option.isidentifier():
-            raise ConfigError("{} is not a valid Python identifier".format(option))
+            raise ConfigError(
+                "{} is not a valid Python identifier".format(option))
         if keyword.iskeyword(option):
-            raise ConfigError("{}: keywords are not permitted as option names".format(option))
+            raise ConfigError(
+                "{}: keywords are not permitted as option names".format(option))
         self._modified = True
         boards = self._boards()
         if not board_id in boards:
@@ -44,7 +50,8 @@ class Config:
 
     def get(self, board_id, option, default=None):
         """Get board option parameter value."""
-        if board_id == 0: board_id = 'default'
+        if board_id == 0:
+            board_id = 'default'
         boards = self._boards()
         try:
             return boards[board_id].get(option, boards['default'].get(option, default))
@@ -53,7 +60,8 @@ class Config:
 
     def remove(self, board_id, option):
         """Remove board option or entire record if option=None."""
-        if board_id == 0: board_id = 'default'
+        if board_id == 0:
+            board_id = 'default'
         dprint("config.remove id={} option={}".format(board_id, option))
         try:
             self._modified = True
@@ -79,24 +87,24 @@ class Config:
         return self._config['boards']
 
     def _create_default(self):
-        self._config = { 'boards': {
+        self._config = {'boards': {
             'default': {
-                    'board': 'HUZZAH32',
-                    'baudrate': 115200,
-                    'buffer_size': 1024,
-                    'binary_transfer': True,
-                    'time_offset': 946684800,
-                    'user': 'micro',
-                    'password': 'python',
-                    'host_dir': '~/iot49',
-                    'remote_dir': '/flash',
-                    'rsync_includes': '*.py,*.json,*.txt,*.html',
-                    'rsync_excludes': '.*,__*__,config.py',
-                    'port': '/dev/cu.SLAB_USBtoUART',
-                    'flash_options': "--chip esp32 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect ",
-                    'firmware_url': "https://people.eecs.berkeley.edu/~boser/iot49/firmware",
-                    'flash_baudrate': 921600 }
-        } }
+                'board': 'HUZZAH32',
+                'baudrate': 115200,
+                'buffer_size': 1024,
+                'binary_transfer': True,
+                'time_offset': 946684800,
+                'user': 'micro',
+                'password': 'python',
+                'host_dir': '~/iot49',
+                'remote_dir': '/flash',
+                'rsync_includes': '*.py,*.json,*.txt,*.html',
+                'rsync_excludes': '.*,__*__,config.py',
+                'port': '/dev/cu.SLAB_USBtoUART',
+                'flash_options': "--chip esp32 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect ",
+                'firmware_url': "https://people.eecs.berkeley.edu/~boser/iot49/firmware",
+                'flash_baudrate': 921600}
+        }}
 
     def _load(self):
         qprint("Loading configuration '{}'".format(self._config_file))
@@ -104,7 +112,8 @@ class Config:
             with open(self._config_file) as f:
                 self._config = literal_eval(f.read())
         except FileNotFoundError:
-            oprint("WARNING: configuration '{}' does not exist, creating default".format(self._config_file))
+            oprint("WARNING: configuration '{}' does not exist, creating default".format(
+                self._config_file))
             self._create_default()
             self._modified = True
         except SyntaxError as e:
@@ -115,7 +124,8 @@ class Config:
         """Save configuration to config_file."""
         with open(self._config_file, 'w') as f:
             print("# User configuration for micropython shell49", file=f)
-            print("# Machine generated on {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")), file=f)
+            print("# Machine generated on {}".format(
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S")), file=f)
             print("# Use the config command in shell49 to modify", file=f)
             print(file=f)
             pprint(self._config, stream=f)

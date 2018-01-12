@@ -10,18 +10,21 @@ from . config import Config
 from . shell import Shell
 from . devs import Devs
 from . device import DeviceError
-from . print_ import oprint, qprint, eprint, dprint, cprint, nocolor
+from . print_ import oprint, eprint, dprint, nocolor
 from . pyboard import PyboardError
+from . version import __version__
 import shell49.print_ as print_
 
 import os
 import sys
 import argparse
 
+
 def real_main():
     """The main program."""
     default_config = os.getenv('SHELL49_CONFIG_FILE') or '~/.shell49_rc.py'
-    default_editor = os.getenv('SHELL49_EDITOR') or os.getenv('VISUAL') or os.getenv('EDITOR') or 'vi'
+    default_editor = os.getenv('SHELL49_EDITOR') or os.getenv(
+        'VISUAL') or os.getenv('EDITOR') or 'vi'
     default_nocolor = 'win32' in sys.platform
     default_debug = False
     default_quiet = False
@@ -31,7 +34,7 @@ def real_main():
         usage="%(prog)s [options] [cmd]",
         description="Remote Shell for MicroPython boards.",
         epilog=(
-"""
+            """
 Environment variables:
   SHELL49_CONFIG_FILE   configuration file (Default: '{}')
   SHELL49_EDITOR        editor (Default: {})
@@ -84,6 +87,13 @@ Environment variables:
         default=False
     )
     parser.add_argument(
+        "-a", "--auto_connect",
+        dest="auto_connect",
+        action="store_false",
+        help="Automatically connect",
+        default=True
+    )
+    parser.add_argument(
         "--timing",
         dest="timing",
         action="store_true",
@@ -99,7 +109,8 @@ Environment variables:
 
     print_.DEBUG = args.debug
     print_.QUIET = args.quiet
-    if args.nocolor: nocolor()
+    if args.nocolor:
+        nocolor()
 
     dprint("debug = %s" % args.debug)
     dprint("quiet = %d" % args.quiet)
@@ -115,8 +126,9 @@ Environment variables:
         devs = Devs(config)
 
         try:
-            if config.get(0, 'auto_connect', True):
-                devs.connect_serial(config.get(0, 'port', '/dev/cu.SLAB_USBtoUART'))
+            if args.auto_connect:
+                devs.connect_serial(config.get(
+                    0, 'port', '/dev/cu.SLAB_USBtoUART'))
         except DeviceError as err:
             eprint(err)
         except PyboardError as e:
@@ -124,14 +136,17 @@ Environment variables:
 
         if args.filename:
             with open(args.filename) as cmd_file:
-                shell = Shell(args.editor, config, devs, stdin=cmd_file, filename=args.filename, timing=args.timing)
+                shell = Shell(args.editor, config, devs, stdin=cmd_file,
+                              filename=args.filename, timing=args.timing)
                 shell.cmdloop('')
         else:
             cmd_line = ' '.join(args.cmd)
             if cmd_line == '':
-                oprint("Welcome to shell49. Type 'help' for information; Control-D to exit.\n")
+                oprint(
+                    "Welcome to shell49. Type 'help' for information; Control-D to exit.\n")
             if devs.num_devices() == 0:
-                eprint('No MicroPython boards connected - use the connect command to add one.\n')
+                eprint(
+                    'No MicroPython boards connected - use the connect command to add one.\n')
             shell = Shell(args.editor, config, devs, timing=args.timing)
             try:
                 shell.cmdloop(cmd_line)

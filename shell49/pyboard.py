@@ -7,7 +7,7 @@ This module provides the Pyboard class, used to communicate with and
 control the pyboard over a serial USB or telent connection.
 """
 
-from . print_ import oprint, dprint
+from . print_ import oprint
 
 import sys
 import time
@@ -18,13 +18,16 @@ except AttributeError:
     # Python2 doesn't have buffer attr
     stdout = sys.stdout
 
+
 def stdout_write_bytes(b):
     b = b.replace(b"\x04", b"")
     stdout.write(b)
     stdout.flush()
 
+
 class PyboardError(BaseException):
     pass
+
 
 class TelnetToSerial:
     def __init__(self, ip, user, password, read_timeout=None):
@@ -46,7 +49,8 @@ class TelnetToSerial:
                     self.fifo = deque()
                     return
 
-        raise PyboardError('Failed to establish a telnet connection with the board')
+        raise PyboardError(
+            'Failed to establish a telnet connection with the board')
 
     def __del__(self):
         self.close()
@@ -109,14 +113,15 @@ class Pyboard:
         return self.ip if self.ip else self.port
 
     def ip(self):
-        return ip
+        return self.ip
 
     def port(self):
-        return port
+        return self.port
 
     def connect(self):
         if self.ip:
-            self.serial = TelnetToSerial(self.ip, self.user, self.password, read_timeout=10)
+            self.serial = TelnetToSerial(
+                self.ip, self.user, self.password, read_timeout=10)
         else:
             import serial
             delayed = False
@@ -124,15 +129,18 @@ class Pyboard:
             for attempt in range(wait + 1):
                 try:
                     if serial.VERSION == '3.0':
-                        self.serial = serial.Serial(self.port, baudrate=self.baudrate, inter_byte_timeout=1)
+                        self.serial = serial.Serial(
+                            self.port, baudrate=self.baudrate, inter_byte_timeout=1)
                     else:
-                        self.serial = serial.Serial(self.port, baudrate=self.baudrate, interCharTimeout=1)
+                        self.serial = serial.Serial(
+                            self.port, baudrate=self.baudrate, interCharTimeout=1)
                     break
-                except (OSError, IOError): # Py2 and Py3 have different errors
+                except (OSError, IOError):  # Py2 and Py3 have different errors
                     if wait == 0:
                         continue
                     if attempt == 0:
-                        sys.stdout.write('Waiting {} seconds for pyboard '.format(wait))
+                        sys.stdout.write(
+                            'Waiting {} seconds for pyboard '.format(wait))
                         delayed = True
                 time.sleep(1)
                 sys.stdout.write('.')
@@ -171,7 +179,8 @@ class Pyboard:
 
     def enter_raw_repl(self):
         # dprint("enter_raw_repl ...")
-        self.serial.write(b'\r\x03\x03') # ctrl-C twice: interrupt any running program
+        # ctrl-C twice: interrupt any running program
+        self.serial.write(b'\r\x03\x03')
 
         # flush input (without relying on serial.flushInput())
         n = self.serial.inWaiting()
@@ -179,13 +188,13 @@ class Pyboard:
             self.serial.read(n)
             n = self.serial.inWaiting()
 
-        self.serial.write(b'\r\x01') # ctrl-A: enter raw REPL
+        self.serial.write(b'\r\x01')  # ctrl-A: enter raw REPL
         data = self.read_until(1, b'raw REPL; CTRL-B to exit\r\n>')
         if not data.endswith(b'raw REPL; CTRL-B to exit\r\n>'):
             print(data)
             raise PyboardError('could not enter raw repl')
 
-        self.serial.write(b'\x04') # ctrl-D: soft reset
+        self.serial.write(b'\x04')  # ctrl-D: soft reset
         data = self.read_until(1, b'soft reboot\r\n')
         if not data.endswith(b'soft reboot\r\n'):
             print(data)
@@ -199,11 +208,12 @@ class Pyboard:
 
     def exit_raw_repl(self):
         # dprint("exit_raw_repl")
-        self.serial.write(b'\r\x02') # ctrl-B: enter friendly REPL
+        self.serial.write(b'\r\x02')  # ctrl-B: enter friendly REPL
 
     def follow(self, timeout, data_consumer=None):
         # wait for normal output
-        data = self.read_until(1, b'\x04', timeout=timeout, data_consumer=data_consumer)
+        data = self.read_until(1, b'\x04', timeout=timeout,
+                               data_consumer=data_consumer)
         if not data.endswith(b'\x04'):
             raise PyboardError('timeout waiting for first EOF reception')
         data = data[:-1]
@@ -230,7 +240,8 @@ class Pyboard:
 
         # write command
         for i in range(0, len(command_bytes), 256):
-            self.serial.write(command_bytes[i:min(i + 256, len(command_bytes))])
+            self.serial.write(
+                command_bytes[i:min(i + 256, len(command_bytes))])
             time.sleep(0.01)
         self.serial.write(b'\x04')
 
@@ -240,7 +251,7 @@ class Pyboard:
             raise PyboardError('could not exec command')
 
     def exec_raw(self, command, timeout=10, data_consumer=None):
-        self.exec_raw_no_follow(command);
+        self.exec_raw_no_follow(command)
         return self.follow(timeout, data_consumer)
 
     def eval(self, expression):

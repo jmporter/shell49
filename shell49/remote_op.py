@@ -1,4 +1,4 @@
-from . print_ import dprint, eprint, qprint
+from . print_ import dprint, eprint, qprint, oprint
 import shell49.print_ as print_
 
 import os
@@ -6,6 +6,7 @@ import sys
 import binascii
 import fnmatch
 import time
+import tempfile
 
 """
 Many of the functions defined in this file are sent to the remote upy
@@ -16,7 +17,9 @@ IS_UPY is used to determine if a funcion is running on the host (False)
 or remote (True). It is set to True in function Device.remote().
 """
 IS_UPY = False
+HAS_BUFFER = True
 BUFFER_SIZE = 2048
+TIME_OFFSET = 0
 
 
 def escape(str):
@@ -69,7 +72,7 @@ def column_print(fmt, rows, print_func):
             print_func('  '.join([row * width[i] for i in range(num_cols)]))
         else:
             print_func('  '.join([align_cell(fmt[i], row[i], width[i])
-                                 for i in range(num_cols)]))
+                                  for i in range(num_cols)]))
 
 
 def find_matching_files(match):
@@ -113,12 +116,12 @@ def parse_pattern(s):
     else:
         directory = '/'.join(parts[:-1])
         pattern = parts[-1]
-    if not is_pattern(directory): # Check for e.g. /abc/*/def
+    if not is_pattern(directory):  # Check for e.g. /abc/*/def
         if is_pattern(pattern):
             if not directory:
                 directory = '/' if absolute else '.'
             return directory, pattern
-    return None, None # Invalid or nonexistent pattern
+    return None, None  # Invalid or nonexistent pattern
 
 
 def validate_pattern(devs, cur_dir, fn):
@@ -127,15 +130,15 @@ def validate_pattern(devs, cur_dir, fn):
     """
     directory, pattern = parse_pattern(fn)
     if directory is None:
-        print_err("Invalid pattern {}.".format(fn))
+        eprint("Invalid pattern {}.".format(fn))
         return None, None
     target = resolve_path(cur_dir, directory)
     mode = auto(devs, get_mode, target)
     if not mode_exists(mode):
-        print_err("cannot access '{}': No such file or directory".format(fn))
+        eprint("cannot access '{}': No such file or directory".format(fn))
         return None, None
     if not mode_isdir(mode):
-        print_err("cannot access '{}': Not a directory".format(fn))
+        eprint("cannot access '{}': Not a directory".format(fn))
         return None, None
     return directory, pattern
 
@@ -149,7 +152,7 @@ def process_pattern(devs, cur_dir, fn):
         if filenames:
             return [directory + '/' + sfn for sfn in filenames]
         else:
-            print_err("cannot access '{}': No such file or directory".format(fn))
+            eprint("cannot access '{}': No such file or directory".format(fn))
 
 
 def resolve_path(cur_dir, path):
@@ -239,6 +242,7 @@ def cat(devs, src_filename, dst_file):
         return dev.remote(send_file_to_host, dev_filename, dst_file, filesize,
                           xfer_func=recv_file_from_remote)
 
+
 def chdir(dirname):
     """Changes the current working directory."""
     import os
@@ -284,7 +288,7 @@ def cp(devs, src_filename, dst_filename):
         # Copying from host to remote
         with open(src_dev_filename, 'rb') as src_file:
             res = dst_dev.remote(recv_file_from_host, src_file, dst_dev_filename,
-                                  filesize, xfer_func=send_file_to_remote)
+                                 filesize, xfer_func=send_file_to_remote)
             return res
 
     # Copying from remote A to remote B. We first copy the file
@@ -372,6 +376,7 @@ def listdir_matches(match):
         else:
             dirname = match[0:last_slash]
             result_prefix = dirname + '/'
+
     def add_suffix_if_dir(filename):
         if (os.stat(filename)[0] & 0x4000) != 0:
             return filename + '/'
@@ -395,7 +400,7 @@ def listdir_stat(dirname):
             # Micropython dates are relative to Jan 1, 2000. On the host, time
             # is relative to Jan 1, 1970.
             return rstat[:7] + tuple(tim + TIME_OFFSET for tim in rstat[7:])
-        return tuple(rstat) # PGH formerly returned an os.stat_result instance
+        return tuple(rstat)  # PGH formerly returned an os.stat_result instance
 
     try:
         files = os.listdir(dirname)
@@ -432,10 +437,11 @@ def remove_file(filename, recursive=False, force=False):
             # directory
             if recursive:
                 for file in os.listdir(filename):
-                    success = remove_file(filename + '/' + file, recursive, force)
+                    success = remove_file(
+                        filename + '/' + file, recursive, force)
                     if not success and not force:
                         return False
-                os.rmdir(filename) # PGH Work like Unix: require recursive
+                os.rmdir(filename)  # PGH Work like Unix: require recursive
             else:
                 if not force:
                     return False
@@ -456,16 +462,18 @@ def make_dir(devs, dst_dir, dry_run, recursed):
     """Creates a directory. Produces information in case of dry run.
     Isues error where necessary.
     """
-    parent = os.path.split(dst_dir.rstrip('/'))[0] # Check for nonexistent parent
-    parent_files = auto(devs, listdir_stat, parent) if parent else True # Relative dir
+    parent = os.path.split(dst_dir.rstrip(
+        '/'))[0]  # Check for nonexistent parent
+    parent_files = auto(devs, listdir_stat,
+                        parent) if parent else True  # Relative dir
     if dry_run:
-        if recursed: # Assume success: parent not actually created yet
+        if recursed:  # Assume success: parent not actually created yet
             qprint("Creating directory {}".format(dst_dir))
         elif parent_files is None:
             qprint("Unable to create {}".format(dst_dir))
         return True
     if not mkdir(devs, dst_dir):
-        print_err("Unable to create {}".format(dst_dir))
+        eprint("Unable to create {}".format(dst_dir))
         return False
     return True
 
@@ -475,10 +483,12 @@ def file_dir(devs, directory):
        filted by rsync_includes, rsync_excludes
     """
     dev, filename = devs.get_dev_and_path(directory)
-    inc = devs.config.get(0, 'rsync_includes', default='*.py,*.json,*.txt,*.html').split(',')
+    inc = devs.config.get(0, 'rsync_includes',
+                          default='*.py,*.json,*.txt,*.html').split(',')
     exc = devs.config.get(0, 'rsync_excludes', default='.*,__*__').split(',')
     files = auto(devs, listdir_stat, directory)
-    if not files: files = []
+    if not files:
+        files = []
     d = {}
     for name, stat in files:
         y = any(map((lambda x: fnmatch.fnmatch(name, x)), inc)) or is_dir(stat)
@@ -524,7 +534,7 @@ def rsync(devs, src_dir, dst_dir, mirror, dry_run, recursed):
     set_src = set(d_src.keys())
     to_add = set_src - set_dst  # Files to copy to dest
     to_del = set_dst - set_src  # To delete from dest
-    to_upd = set_dst.intersection(set_src) # In both: may need updating
+    to_upd = set_dst.intersection(set_src)  # In both: may need updating
 
     if False:
         eprint("rsync {} -> {}".format(src_dir, dst_dir))
@@ -549,7 +559,8 @@ def rsync(devs, src_dir, dst_dir, mirror, dry_run, recursed):
 
     # delete ...
     for f in to_del:
-        if not mirror: break
+        if not mirror:
+            break
         dst = os.path.join(dst_dir, f)
         qprint("Removing {}".format(dst))
         if not dry_run:
@@ -579,16 +590,18 @@ def rsync(devs, src_dir, dst_dir, mirror, dry_run, recursed):
                 if False:
                     eprint("BEB src {} > dst {} delta={}".format(
                         stat_mtime(d_src[f]), stat_mtime(d_dst[f]),
-                        stat_mtime(d_src[f]) -stat_mtime(d_dst[f])))
+                        stat_mtime(d_src[f]) - stat_mtime(d_dst[f])))
                 if stat_size(d_src[f]) != stat_size(d_dst[f]) or \
                    stat_mtime(d_src[f]) > stat_mtime(d_dst[f]):
                     msg = "Copying {} (newer than {})"
                     qprint(msg.format(src, dst))
                     if not dry_run:
                         if not cp(devs, src, dst):
-                            eprint("*** Unable to update {} --> {}".format(src, dst))
+                            eprint(
+                                "*** Unable to update {} --> {}".format(src, dst))
                 else:
-                    dprint(f, "NO update src time:", stat_mtime(d_src[f]), "dst time", stat_mtime(d_dst[f]), "delta", stat_mtime(d_src[f])-stat_mtime(d_dst[f]))
+                    dprint(f, "NO update src time:", stat_mtime(d_src[f]), "dst time", stat_mtime(
+                        d_dst[f]), "delta", stat_mtime(d_src[f]) - stat_mtime(d_dst[f]))
 
 
 def set_time(y, m, d, h, min, s):
@@ -634,7 +647,8 @@ def osdebug(level):
                 l = esp.LOG_DEBUG
             elif level is 'verbose':
                 l = esp.LOG_VERBOSE
-            else: level = 'none'
+            else:
+                level = 'none'
         esp.osdebug('', l)
         return level
     except:
@@ -681,6 +695,7 @@ def get_unique_id(default):
 # no transformations, so if that's available, we use it, otherwise we need
 # to use hexlify in order to get unaltered data.
 
+
 def recv_file_from_host(src_file, dst_filename, filesize, dst_mode='wb'):
     """Function which runs on the pyboard. Matches up with send_file_to_remote."""
     import sys
@@ -714,9 +729,11 @@ def recv_file_from_host(src_file, dst_filename, filesize, dst_mode='wb'):
                 buf_index = 0
                 while buf_remaining > 0:
                     if HAS_BUFFER:
-                        bytes_read = sys.stdin.buffer.readinto(read_buf, bytes_remaining)
+                        bytes_read = sys.stdin.buffer.readinto(
+                            read_buf, bytes_remaining)
                     else:
-                        bytes_read = sys.stdin.readinto(read_buf, bytes_remaining)
+                        bytes_read = sys.stdin.readinto(
+                            read_buf, bytes_remaining)
                     if bytes_read > 0:
                         write_buf[buf_index:bytes_read] = read_buf[0:bytes_read]
                         buf_index += bytes_read
@@ -746,7 +763,7 @@ def send_file_to_remote(dev, src_file, dst_filename, filesize, dst_mode='wb'):
         read_size = min(bytes_remaining, buf_size)
         buf = src_file.read(read_size)
         #sys.stdout.write('\r%d/%d' % (filesize - bytes_remaining, filesize))
-        #sys.stdout.flush()
+        # sys.stdout.flush()
         if dev.has_buffer:
             dev.write(buf)
         else:
@@ -759,8 +776,7 @@ def send_file_to_remote(dev, src_file, dst_filename, filesize, dst_mode='wb'):
             # This should only happen if an error occurs
             sys.stdout.write(chr(ord(char)))
         bytes_remaining -= read_size
-    #sys.stdout.write('\r')
-
+    # sys.stdout.write('\r')
 
 
 def recv_file_from_remote(dev, src_filename, dst_file, filesize):
@@ -828,8 +844,7 @@ def test_buffer():
     """Checks the micropython firmware to see if sys.stdin.buffer exists."""
     import sys
     try:
-        _ = sys.stdin.buffer
-        return True
+        return sys.stdin.buffer != None
     except:
         return False
 
@@ -838,8 +853,7 @@ def test_readinto():
     """Checks the micropython firmware to see if sys.stdin.readinto exists."""
     import sys
     try:
-        _ = sys.stdin.readinto
-        return True
+        return sys.stdin.readinto != None
     except:
         return False
 
@@ -848,8 +862,7 @@ def test_unhexlify():
     """Checks the micropython firmware to see if ubinascii.unhexlify exists."""
     import ubinascii
     try:
-        _ = ubinascii.unhexlify
-        return True
+        return ubinascii.unhexlify != None
     except:
         return False
 
