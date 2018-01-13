@@ -1373,7 +1373,7 @@ class Shell(cmd.Cmd):
             file = self.last_run_file
             qprint("run '{}' on micropython board".format(file))
         else:
-            file = os.path.join(self.cur_dir, file)
+            file = os.path.join(self.cur_dir, args[0])
             self.last_run_file = file
 
         try:
