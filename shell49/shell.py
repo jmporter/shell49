@@ -1369,13 +1369,13 @@ class Shell(cmd.Cmd):
             eprint("*** Only one file, please!")
             return
 
-        file = args[0] if len(args) > 0 else self.last_run_file
-        self.last_run_file = file
-
         if len(args) == 0:
-            qprint("run {} on micropython board".format(file))
+            file = self.last_run_file
+            qprint("run '{}' on micropython board".format(file))
         else:
             file = os.path.join(self.cur_dir, file)
+            self.last_run_file = file
+
         try:
             self.devs.default_device().runfile(file)
         except TypeError:
