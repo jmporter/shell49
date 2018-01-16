@@ -6,7 +6,8 @@ from urllib.request import urlopen, urlretrieve
 from urllib.error import HTTPError
 from tempfile import TemporaryDirectory
 from ast import literal_eval
-import os, sys
+import esptool
+import os, shlex
 
 
 class FlasherError(BaseException):
@@ -20,9 +21,6 @@ class Flasher:
             url = url + '/'
         self.board = board
         self.url = url
-        self.esptool = 'esptool.py'
-        if sys.platform == 'win32':
-            self.esptool = 'esptool'
         specfile = url + board + '/spec.py'
         qprint("download", specfile)
         try:
@@ -43,8 +41,7 @@ class Flasher:
     def _esp_flasher(self, version, **kwargs):
         """Flash firmware"""
         # flash command
-        cmd = "{} --port {} --baud {} {} {}".format(
-            self.esptool,
+        cmd = "esptool.py --port {} --baud {} {} {}".format(
             kwargs['port'],
             kwargs['baudrate'],
             kwargs['flash_options'],
@@ -60,15 +57,19 @@ class Flasher:
                 urlretrieve(url, p[1])
             # flash
             qprint("flashing ...", cmd)
-            os.system(cmd)
+            # os.system(cmd)
+            esptool.sys.argv = shlex.split(cmd)
+            esptool._main()
 
     def _dfu_flasher(self, version, **kwargs):
         raise NotImplementedError("DFU flasher not implemented")
 
     def erase_flash(self, port):
         qprint("erasing flash ...")
-        cmd = "{} --port {} erase_flash".format(self.esptool, port)
-        os.system(cmd)
+        cmd = "esptool.py --port {} erase_flash".format(port)
+        # os.system(cmd)
+        esptool.sys.argv = shlex.split(cmd)
+        esptool._main()
 
     def versions(self):
         """Return list of available firmware versions."""

@@ -135,7 +135,9 @@ Environment variables:
             eprint(err)
         except PyboardError as e:
             eprint(e)
-
+        except KeyboardInterrupt:
+            pass
+            
         if args.filename:
             with open(args.filename) as cmd_file:
                 shell = Shell(args.editor, config, devs, stdin=cmd_file,

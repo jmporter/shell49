@@ -34,7 +34,6 @@ setup(
   ],
   install_requires=[
       'pyserial >= 2.0',
-      'esptool == 2.1',
       'zeroconf >= 0.19'
   ],
   entry_points = {

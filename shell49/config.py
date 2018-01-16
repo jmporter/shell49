@@ -79,7 +79,9 @@ class Config:
     def options(self, board_id='default'):
         """Return list of option names for specified board."""
         try:
-            return list(self._boards()[board_id].keys())
+            keys = list(self._boards()[board_id].keys())
+            keys.extend(['user', 'password'])
+            return list(keys)
         except:
             return []
 
@@ -96,7 +98,7 @@ class Config:
                 'time_offset': 946684800,
                 'user': 'micro',
                 'password': 'python',
-                'host_dir': '~/iot49',
+                'host_dir': '.',
                 'remote_dir': '/flash',
                 'rsync_includes': '*.py,*.json,*.txt,*.html',
                 'rsync_excludes': '.*,__*__,config.py',

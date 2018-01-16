@@ -1357,6 +1357,9 @@ class Shell(cmd.Cmd):
         rsync(self.devs, src_dir, dst_dir,
               mirror=args.mirror, dry_run=args.dry_run, recursed=True)
 
+    def complete_run(self, text, line, begidx, endidx):
+        return self.filename_complete(text, line, begidx, endidx)
+
     def do_run(self, line):
         """run [FILE]
 

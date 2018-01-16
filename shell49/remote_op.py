@@ -181,7 +181,9 @@ def resolve_path(cur_dir, path):
             new_comps.append(comp)
     if len(new_comps) == 1 and new_comps[0] == '':
         return '/'
-    return '/'.join(new_comps)
+    res = '/'.join(new_comps)
+    if len(res) == 0: res = '.'
+    return res
 
 
 def remote_repr(i):
@@ -223,8 +225,10 @@ def auto(devs, func, filename, *args, **kwargs):
         # use large buffer on the host
         global BUFFER_SIZE
         BUFFER_SIZE = 4096
-        if dev_filename[0] == '~':
+        try:
             dev_filename = os.path.expanduser(dev_filename)
+        except IndexError:
+            pass
         return func(dev_filename, *args, **kwargs)
     res = dev.remote_eval(func, dev_filename, *args, **kwargs)
     return res
@@ -675,10 +679,10 @@ def get_mac_address():
     try:
         from binascii import hexlify
         from network import WLAN, STA_IF
-        return hexlify(WLAN(STA_IF).config('mac'), ':').decode('utf-8')
+        mac = hexlify(WLAN(STA_IF).config('mac'), ':').decode('ascii')
     except:
-        return None
-
+        mac = None
+    return repr(mac)    
 
 def get_unique_id(default):
     """Returns the boards name (if available)."""

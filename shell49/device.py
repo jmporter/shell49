@@ -1,7 +1,7 @@
 from . print_ import qprint, dprint, eprint
 from . pyboard import Pyboard, PyboardError
 from . remote_op import listdir, remote_repr, set_time, \
-    osdebug, test_buffer, get_unique_id
+    osdebug, test_buffer, get_unique_id, get_mac_address
 import shell49.remote_op as remote_op
 
 import inspect
@@ -38,6 +38,8 @@ class Device(object):
         self.sync_time()
         dprint("synced time")
         # self.esp_osdebug(None)
+        if not self.get('mac'):
+            self.set('mac', self.remote_eval(get_mac_address))
 
     def get_id(self):
         return self.id
