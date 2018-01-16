@@ -30,7 +30,7 @@ class PyboardError(BaseException):
 
 
 class TelnetToSerial:
-    def __init__(self, ip, user, password, read_timeout=None):
+    def __init__(self, ip, user, password, read_timeout=5):
         import telnetlib
         self.ip = ip
         self.tn = telnetlib.Telnet(ip, timeout=15)
@@ -99,7 +99,7 @@ class TelnetToSerial:
 
 class Pyboard:
 
-    def __init__(self, port=None, baudrate=0, wait=0, ip=None, user='micro', password='python'):
+    def __init__(self, port=None, baudrate=0, wait=10, ip=None, user='micro', password='python'):
         """Connect to MicroPython board via serial or telnet (if IP specified)."""
         self.port = port
         self.baudrate = baudrate

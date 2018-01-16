@@ -122,6 +122,8 @@ Environment variables:
         print(__version__)
         return
 
+    args.config = os.path.expanduser(args.config)
+
     with Config(args.config) as config:
         devs = Devs(config)
 

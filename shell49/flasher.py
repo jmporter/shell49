@@ -4,10 +4,9 @@ from . print_ import qprint
 
 from urllib.request import urlopen, urlretrieve
 from urllib.error import HTTPError
-from urllib.parse import urljoin
 from tempfile import TemporaryDirectory
 from ast import literal_eval
-import os
+import os, sys
 
 
 class FlasherError(BaseException):
@@ -17,9 +16,15 @@ class FlasherError(BaseException):
 class Flasher:
 
     def __init__(self, *, board='HUZZAH32', url="https://people.eecs.berkeley.edu/~boser/iot49/firmware/"):
+        if not url.endswith('/'):
+            url = url + '/'
         self.board = board
         self.url = url
-        specfile = urljoin(url, board, 'spec.py')
+        self.esptool = 'esptool.py'
+        if sys.platform == 'win32':
+            self.esptool = 'esptool'
+        specfile = url + board + '/spec.py'
+        qprint("download", specfile)
         try:
             with urlopen(specfile) as f:
                 self.spec = literal_eval(f.read().decode('utf-8'))
@@ -38,7 +43,8 @@ class Flasher:
     def _esp_flasher(self, version, **kwargs):
         """Flash firmware"""
         # flash command
-        cmd = "esptool.py --port {} --baud {} {} {}".format(
+        cmd = "{} --port {} --baud {} {} {}".format(
+            self.esptool,
             kwargs['port'],
             kwargs['baudrate'],
             kwargs['flash_options'],
@@ -49,7 +55,7 @@ class Flasher:
             os.chdir(dir)
             # download firmware
             for p in self.spec['partitions']:
-                url = urljoin(self.url, self.board, version, p[1])
+                url = self.url + self.board + '/' + version + '/' + p[1]
                 qprint("download", url)
                 urlretrieve(url, p[1])
             # flash
@@ -61,7 +67,7 @@ class Flasher:
 
     def erase_flash(self, port):
         qprint("erasing flash ...")
-        cmd = "esptool.py --port {} erase_flash".format(port)
+        cmd = "{} --port {} erase_flash".format(self.esptool, port)
         os.system(cmd)
 
     def versions(self):

@@ -1,5 +1,5 @@
 from setuptools import setup
-import os, sys
+import sys
 
 if sys.version_info < (3,4):
     print('shell49 requires Python 3.4 or newer.')
@@ -34,7 +34,7 @@ setup(
   ],
   install_requires=[
       'pyserial >= 2.0',
-      'esptool >= 2.1',
+      'esptool == 2.1',
       'zeroconf >= 0.19'
   ],
   entry_points = {

@@ -224,7 +224,7 @@ class DeviceSerial(Device):
     def __init__(self, config, port, baud):
         super().__init__(config)
         self.port = port
-        wait = self.get('wait', default=0)
+        wait = self.get('wait', default=3)
 
         if wait and not os.path.exists(port):
             toggle = False
@@ -239,7 +239,6 @@ class DeviceSerial(Device):
                 qprint()
             except KeyboardInterrupt:
                 raise DeviceError('Interrupted')
-
         try:
             pyb = Pyboard(self.port, baudrate=baud, wait=wait)
         except PyboardError as err:
