@@ -1,6 +1,6 @@
 # shell49
 
-Remote MicroPytyhon shell based on Dave Hylands' [rshell](https://github.com/dhylands/rshell).
+Remote MicroPython shell based on Dave Hylands' [rshell](https://github.com/dhylands/rshell).
 
 ## Main features:
 
@@ -18,6 +18,13 @@ Remote MicroPytyhon shell based on Dave Hylands' [rshell](https://github.com/dhy
 ```
 pip install shell49
 ```
+
+If the installation fails, this may be due to the lack of an appropriate `C/C++` compiler that is required to install some of the library modules used by `shell49` (in particular `netifaces`, needed for mDNS).  Follow the instructions below to install a compiler:
+
+* OS X: from the app store, install `xcode`, the official [Apple Developer Tools](https://developer.apple.com/xcode/)
+* Windows: follow the instructions at [https://msdn.microsoft.com/en-us/library/ms235639.aspx](https://msdn.microsoft.com/en-us/library/ms235639.aspx). You will be asked to download and install the `Microsoft Visual C++ Build Tools 2015`.
+
+## Upgrading
 
 To upgrade shell49 to the newest version, issue the command
 
