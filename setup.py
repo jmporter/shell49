@@ -34,7 +34,8 @@ setup(
   ],
   install_requires=[
       'pyserial >= 2.0',
-      'zeroconf >= 0.19'
+      'zeroconf >= 0.19',
+      'pyreadline'
   ],
   entry_points = {
       'console_scripts': [
