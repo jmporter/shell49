@@ -4,6 +4,7 @@ from . print_ import qprint
 
 from urllib.request import urlopen, urlretrieve
 from urllib.error import HTTPError
+from urllib.parse import urljoin
 from tempfile import TemporaryDirectory
 from ast import literal_eval
 import os
@@ -18,7 +19,7 @@ class Flasher:
     def __init__(self, *, board='HUZZAH32', url="https://people.eecs.berkeley.edu/~boser/iot49/firmware/"):
         self.board = board
         self.url = url
-        specfile = os.path.join(url, board, 'spec.py')
+        specfile = urljoin(url, board, 'spec.py')
         try:
             with urlopen(specfile) as f:
                 self.spec = literal_eval(f.read().decode('utf-8'))
@@ -48,7 +49,7 @@ class Flasher:
             os.chdir(dir)
             # download firmware
             for p in self.spec['partitions']:
-                url = os.path.join(self.url, self.board, version, p[1])
+                url = urljoin(self.url, self.board, version, p[1])
                 qprint("download", url)
                 urlretrieve(url, p[1])
             # flash
