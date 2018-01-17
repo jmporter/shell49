@@ -468,7 +468,7 @@ class Shell(cmd.Cmd):
         """
         dd = self.devs.default_device()
         release, machine, version = dd.remote_eval(upy_version)
-        fmt = "{:>20s} = {}"
+        fmt = "{:>10s} = {}"
         oprint(fmt.format("board", dd.get('name')))
         oprint(fmt.format("firmware", version))
         oprint(fmt.format("release", release))

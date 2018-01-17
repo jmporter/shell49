@@ -1,12 +1,12 @@
 #! /usr/bin/env python3
 
 from . print_ import qprint
+from shell49 import esptool
 
 from urllib.request import urlopen, urlretrieve
 from urllib.error import HTTPError
 from tempfile import TemporaryDirectory
 from ast import literal_eval
-import esptool
 import os, shlex
 
 
