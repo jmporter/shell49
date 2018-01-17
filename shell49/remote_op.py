@@ -216,6 +216,19 @@ def board_name(default):
     return repr(name)
 
 
+def upy_version():
+    """Returns MicroPython version information."""
+    import os
+    version = '?'
+    try:
+        import iot49
+        version = iot49.version()
+    except:
+        pass
+    u = os.uname()
+    return (u.release, u.machine, version)
+
+
 def auto(devs, func, filename, *args, **kwargs):
     """If `filename` is a remote file, then this function calls func on the
        micropython board, otherwise it calls it locally.
@@ -682,7 +695,7 @@ def get_mac_address():
         mac = hexlify(WLAN(STA_IF).config('mac'), ':').decode('ascii')
     except:
         mac = None
-    return repr(mac)    
+    return repr(mac)
 
 def get_unique_id(default):
     """Returns the boards name (if available)."""

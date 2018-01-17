@@ -9,10 +9,12 @@ from . remote_op import is_pattern, resolve_path, auto, get_mode, mode_isdir, \
     decorated_filename, print_cols, mode_isfile, cat, column_print, \
     get_ip_address, get_mac_address, get_time, set_time, osdebug, get_filesize, \
     cp, rsync, mkdir, rm, process_pattern, print_long, trim, unescape, \
-    listdir_matches, escape, validate_pattern, get_unique_id, recv_file_from_host, send_file_to_remote
+    listdir_matches, escape, validate_pattern, get_unique_id, \
+    upy_version, recv_file_from_host, send_file_to_remote
 from . getch import getch
 from . mdns_client import MdnsListenter
 from . flasher import Flasher, FlasherError
+from . version import __version__
 
 from datetime import datetime
 from tempfile import NamedTemporaryFile
@@ -458,6 +460,20 @@ class Shell(cmd.Cmd):
         args = self.line_to_args(line)
         for idx in range(len(args)):
             self.print("arg[%d] = '%s'" % (idx, args[idx]))
+
+    def do_version(self, line):
+        """version
+
+        Print shell49 and MicroPython version information.
+        """
+        dd = self.devs.default_device()
+        release, machine, version = dd.remote_eval(upy_version)
+        fmt = "{:>20s} = {}"
+        oprint(fmt.format("board", dd.get('name')))
+        oprint(fmt.format("firmware", version))
+        oprint(fmt.format("release", release))
+        oprint(fmt.format("machine", machine))
+        oprint(fmt.format("shell49", __version__))
 
     def do_mdns(self, line):
         """mdns

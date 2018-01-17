@@ -23,8 +23,7 @@ import argparse
 def real_main():
     """The main program."""
     default_config = os.getenv('SHELL49_CONFIG_FILE') or '~/.shell49_rc.py'
-    default_editor = os.getenv('SHELL49_EDITOR') or os.getenv(
-        'VISUAL') or os.getenv('EDITOR') or 'vi'
+    default_editor = os.getenv('SHELL49_EDITOR') or os.getenv('VISUAL') or os.getenv('EDITOR') or 'vi'
     default_nocolor = 'win32' in sys.platform
     default_debug = False
     default_quiet = False
@@ -137,7 +136,7 @@ Environment variables:
             eprint(e)
         except KeyboardInterrupt:
             pass
-            
+
         if args.filename:
             with open(args.filename) as cmd_file:
                 shell = Shell(args.editor, config, devs, stdin=cmd_file,
