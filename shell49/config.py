@@ -81,7 +81,7 @@ class Config:
         try:
             keys = list(self._boards()[board_id].keys())
             keys.extend(['user', 'password'])
-            return list(keys)
+            return set(keys)
         except:
             return []
 

@@ -555,47 +555,68 @@ class Shell(cmd.Cmd):
     )
 
     def print_config(self, id, *, exc={}, color=print_.OUTPUT_COLOR):
-        for k in self.config.options(id):
+        for k in sorted(self.config.options(id)):
             if not k in exc:
                 v = self.config.get(id, k)
                 cprint("{:>20s} = {}".format(k, v), color=color)
 
     def do_config(self, line):
-        """config                                   Print option values of default board.
-       config [-u] [-d] [--default] OPTION [VALUE]   Get/set OPTION of default board to VALUE.
+        """config                                   Print option values.
+       config [-u] [-d] [--default] OPTION [VALUE]   Set/delete OPTION to VALUE.
+
+       Options:
+          --default                                  Act on default configuration, rather than default board.
+          -d                                         Delete rather than set OPTION.
+          -u                                         Upload configuration to default board.
         """
+        def_dev = None
+        board_id = 'default'
         try:
             def_dev = self.devs.default_device()
+            board_id = def_dev.get_id()
         except DevsError:
-            qprint("No boards are connected, showing default configuration:")
-            self.print_config('default')
-            return
-        # no arguments ... just print configuration of current default device
+            pass
+
         if line == '':
-            keys = def_dev.options()
-            if not 'name' in keys:
-                eprint(
-                    "WARNING: board has no 'name' attribute. Assign with 'config -u name ...'.")
-            self.print_config(def_dev.get_id(), color=print_.PY_COLOR)
-            oprint("Defaults:")
-            self.print_config('default', exc=keys)
+            # print configuration
+            self.print_config(board_id, color=print_.PY_COLOR)
+            if def_dev:
+                oprint("Defaults:")
+                keys = def_dev.options()
+                self.print_config('default', exc=keys)
             return
+
         # parse arguments
         args = self.line_to_args(line)
+        if args.default:
+            board_id = 'default'
+            def_dev = None
         value = ' '.join(args.value)
         try:
+            # try to convert value to Python object (e.g. for numbers)
             value = eval(value)
         except:
             pass
-        board_id = 'default' if args.default else def_dev.get_id()
+        if not args.default and not def_dev:
+            eprint("*** No board connected, use --default to change default configuration")
+            return
+
+        # delete / set option value
         if args.delete:
+            # delete option
             self.config.remove(board_id, args.option)
         else:
+            # set option
             try:
                 self.config.set(board_id, args.option, value)
             except ConfigError as e:
                 eprint("*** {}".format(e))
+
+        # upload
         if args.upload:
+            if not def_dev:
+                eprint("*** No board connected, cannot upload configuration")
+                return
             with NamedTemporaryFile() as temp:
                 temp.close()
                 f = open(temp.name, 'w')
@@ -608,6 +629,7 @@ class Shell(cmd.Cmd):
                     'remote_dir', '/flash'), 'config.py')
                 cp(self.devs, temp.name, dst)
                 os.unlink(temp.name)
+
 
     argparse_flash = (
         add_arg(
