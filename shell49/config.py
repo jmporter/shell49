@@ -114,8 +114,7 @@ class Config:
             with open(self._config_file) as f:
                 self._config = literal_eval(f.read())
         except FileNotFoundError:
-            oprint("WARNING: configuration '{}' does not exist, creating default".format(
-                self._config_file))
+            oprint("WARNING: configuration '{}' does not exist, creating default".format(self._config_file))
             self._create_default()
             self._modified = True
         except SyntaxError as e:

@@ -29,6 +29,14 @@ class Flasher:
         except HTTPError:
             raise FlasherError("{} not found".format(specfile))
 
+    def _esptool(self, cmd):
+        try:
+            # os.system(cmd)
+            esptool.sys.argv = shlex.split(cmd)
+            esptool._main()
+        except PermissionError:
+            pass
+
     def flash(self, version, **kwargs):
         flasher = self.spec['flasher']
         if flasher == 'ESP':
@@ -57,9 +65,7 @@ class Flasher:
                 urlretrieve(url, p[1])
             # flash
             qprint("flashing ...", cmd)
-            # os.system(cmd)
-            esptool.sys.argv = shlex.split(cmd)
-            esptool._main()
+            self._esptool(cmd)
 
     def _dfu_flasher(self, version, **kwargs):
         raise NotImplementedError("DFU flasher not implemented")
@@ -67,9 +73,7 @@ class Flasher:
     def erase_flash(self, port):
         qprint("erasing flash ...")
         cmd = "esptool.py --port {} erase_flash".format(port)
-        # os.system(cmd)
-        esptool.sys.argv = shlex.split(cmd)
-        esptool._main()
+        self._esptool(cmd)
 
     def versions(self):
         """Return list of available firmware versions."""
