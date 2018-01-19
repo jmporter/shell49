@@ -556,6 +556,7 @@ def rsync(devs, src_dir, dst_dir, mirror, dry_run, recursed):
         return
 
     # get list of src & dst files and stats
+    qprint("   analyzing {}".format(dst_dir))
     d_src = file_dir(devs, src_dir)
     d_dst = file_dir(devs, dst_dir)
 
