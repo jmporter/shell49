@@ -697,6 +697,8 @@ class Shell(cmd.Cmd):
                 oprint('\n'.join(["  {:8s} {}".format(v, d)
                                   for v, d in f.versions()]))
                 return
+            dev = self.devs.find_serial_device_by_port(port)
+            if dev: dev.close()
             if args.erase:
                 f.erase_flash(port)
             f.flash(args.version, flash_options=flash_options,
@@ -1150,7 +1152,7 @@ class Shell(cmd.Cmd):
                 save_timeout = dev.timeout()
                 # Set a timeout so that the read returns periodically with no data
                 # and allows us to check whether the main thread wants us to quit.
-                dev.timeout(1)
+                dev.timeout(0.5)
                 while not self.quit_serial_reader:
                     try:
                         char = dev.read(1)
@@ -1173,8 +1175,7 @@ class Shell(cmd.Cmd):
                         if self.quit_when_no_output:
                             break
                         continue
-                    self.stdout.write(char)
-                    self.stdout.flush()
+                    print(char.decode('ascii'), end='', flush=True)
                 dev.timeout(save_timeout)
             except DeviceError:
                 # The device is no longer present.

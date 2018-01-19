@@ -30,12 +30,9 @@ class Flasher:
             raise FlasherError("{} not found".format(specfile))
 
     def _esptool(self, cmd):
-        try:
-            # os.system(cmd)
-            esptool.sys.argv = shlex.split(cmd)
-            esptool._main()
-        except PermissionError:
-            pass
+        # os.system(cmd)
+        esptool.sys.argv = shlex.split(cmd)
+        esptool._main()
 
     def flash(self, version, **kwargs):
         flasher = self.spec['flasher']
@@ -56,16 +53,20 @@ class Flasher:
             ' '.join(["0x{:x} {}".format(addr, file)
                       for addr, file in self.spec['partitions']])
         )
-        with TemporaryDirectory() as dir:
-            os.chdir(dir)
-            # download firmware
-            for p in self.spec['partitions']:
-                url = self.url + self.board + '/' + version + '/' + p[1]
-                qprint("download", url)
-                urlretrieve(url, p[1])
-            # flash
-            qprint("flashing ...", cmd)
-            self._esptool(cmd)
+        try:
+            with TemporaryDirectory() as dir:
+                os.chdir(dir)
+                # download firmware
+                for p in self.spec['partitions']:
+                    url = self.url + self.board + '/' + version + '/' + p[1]
+                    qprint("download", url)
+                    urlretrieve(url, p[1])
+                # flash
+                qprint("flashing ...", cmd)
+                self._esptool(cmd)
+        except PermissionError:
+            # Windows throws error
+            pass
 
     def _dfu_flasher(self, version, **kwargs):
         raise NotImplementedError("DFU flasher not implemented")

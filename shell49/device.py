@@ -29,17 +29,18 @@ class Device(object):
         self.pyb = pyb
         self.id = self.remote_eval(get_unique_id, self.id)
         qprint("Connected to '{}' (id={}), synchonizing time ...".format(
-            self.name(), self.id))
+            self.name(), self.id), end='')
         self.has_buffer = self.remote_eval(test_buffer)
-        dprint("find has_buffer", self.has_buffer)
+        qprint(".", end='', flush=True)
         self.root_dirs = ['/{}/'.format(dir)
                           for dir in self.remote_eval(listdir, '/')]
-        dprint("root_dirs", self.root_dirs)
+        qprint(".", end='', flush=True)
         self.sync_time()
-        dprint("synced time")
+        qprint(".", end='', flush=True)
         # self.esp_osdebug(None)
         if not self.get('mac'):
             self.set('mac', self.remote_eval(get_mac_address))
+        qprint(".")
 
     def get_id(self):
         return self.id
@@ -136,10 +137,8 @@ class Device(object):
         func_str = func_str.replace('HAS_BUFFER', '{}'.format(has_buffer))
         func_str = func_str.replace('BUFFER_SIZE', '{}'.format(buffer_size))
         func_str = func_str.replace('IS_UPY', 'True')
-        dprint('----- About to send %d bytes of code to the pyboard -----' %
-               len(func_str))
-        dprint(func_str)
-        dprint('-----')
+        dprint('remote: {}({}) --> '.format(func.__name__, repr(args)[1:-1]), end='')
+        start_time = time.time()
         self.check_pyb()
         try:
             self.pyb.enter_raw_repl()
@@ -154,9 +153,7 @@ class Device(object):
         except (serial.serialutil.SerialException, TypeError):
             self.close()
             raise DeviceError('serial port %s closed' % self.address())
-        dprint('-----Response-----')
-        dprint(output)
-        dprint('-----')
+        dprint(output, "   ({:.4}s)".format(time.time()-start_time))
         return output
 
     def remote_eval(self, func, *args, **kwargs):

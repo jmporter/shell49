@@ -155,7 +155,7 @@ def process_pattern(devs, cur_dir, fn):
             eprint("cannot access '{}': No such file or directory".format(fn))
 
 
-def resolve_path(cur_dir, path):
+def resolve_path_original(cur_dir, path):
     """Resolves path and converts it into an absolute path."""
     if path[0] == '~':
         # ~ or ~user
@@ -183,6 +183,18 @@ def resolve_path(cur_dir, path):
         return '/'
     res = '/'.join(new_comps)
     if len(res) == 0: res = '.'
+    return res
+
+
+def resolve_path(cur_dir, path):
+    """Resolves path and converts it into an absolute path."""
+    res = os.path.expanduser(path)
+    if not os.path.isabs(path):
+        res = os.path.join(cur_dir, res)
+    res = os.path.normpath(res)
+    if 'win32' in sys.platform and res.startswith('\\'):
+        res = res.replace('\\', '/')
+    # eprint("resolve_path:\ncur_dir {}\npath    {}\n-> res  {}\nvs      {}".format(cur_dir, path, res, resolve_path_original(cur_dir, path)))
     return res
 
 
@@ -290,6 +302,7 @@ def cp(devs, src_filename, dst_filename):
     """
     src_dev, src_dev_filename = devs.get_dev_and_path(src_filename)
     dst_dev, dst_dev_filename = devs.get_dev_and_path(dst_filename)
+
     if src_dev is dst_dev:
         # src and dst are either on the same remote, or both are on the host
         return auto(devs, copy_file, src_filename, dst_dev_filename)

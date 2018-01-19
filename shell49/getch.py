@@ -30,6 +30,7 @@ class _Getch:
 
 class _GetchUnix:
     def __init__(self):
+        # import throws error - used by _Getch to determine os
         import tty, sys
 
     def __call__(self):
@@ -48,6 +49,7 @@ class _GetchUnix:
 
 class _GetchWindows:
     def __init__(self):
+        # import throws error - used by _Getch to determine os
         import msvcrt
 
     def __call__(self):

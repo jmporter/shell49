@@ -51,11 +51,11 @@ BG_DK_WHITE = "\x1b[2;47m"
 
 DIR_COLOR = LT_CYAN
 PROMPT_COLOR = LT_YELLOW
-PY_COLOR = LT_BLUE
+PY_COLOR = LT_GREEN
 END_COLOR = NO_COLOR
 DEBUG_COLOR = DK_MAGENTA
 ERR_COLOR = LT_RED
-QUIET_COLOR = DK_BLACK
+QUIET_COLOR = DK_BLUE
 OUTPUT_COLOR = LT_MAGENTA
 
 
@@ -72,6 +72,7 @@ def nocolor():
     QUIET_COLOR = ''
     OUTPUT_COLOR = ''
     NO_COLOR = ''
+    END_COLOR = ''
 
 
 def cprint(*a, color=NO_COLOR, file=sys.stdout, **kw):

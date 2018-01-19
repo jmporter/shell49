@@ -86,10 +86,10 @@ Environment variables:
         default=False
     )
     parser.add_argument(
-        "-a", "--auto_connect",
+        "-a", "--no_auto_connect",
         dest="auto_connect",
         action="store_false",
-        help="Automatically connect",
+        help="Do not automatically connect to board connected to serial port",
         default=True
     )
     parser.add_argument(
@@ -128,8 +128,7 @@ Environment variables:
 
         try:
             if args.auto_connect:
-                devs.connect_serial(config.get(
-                    0, 'port', '/dev/cu.SLAB_USBtoUART'))
+                devs.connect_serial(config.get('default', 'port'))
         except DeviceError as err:
             eprint(err)
         except PyboardError as e:
@@ -155,6 +154,8 @@ Environment variables:
                 shell.cmdloop(cmd_line)
             except KeyboardInterrupt:
                 print('')
+            except PyboardError as e:
+                eprint("***", e)
 
 
 def main():
