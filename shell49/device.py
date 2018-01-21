@@ -31,16 +31,16 @@ class Device(object):
         qprint("Connected to '{}' (id={}), synchonizing time ...".format(
             self.name(), self.id), end='')
         self.has_buffer = self.remote_eval(test_buffer)
-        qprint(".", end='', flush=True)
+        qprint(" 1", end='', flush=True)
         self.root_dirs = ['/{}/'.format(dir)
                           for dir in self.remote_eval(listdir, '/')]
-        qprint(".", end='', flush=True)
+        qprint(" 2", end='', flush=True)
         self.sync_time()
-        qprint(".", end='', flush=True)
+        qprint(" 3", end='', flush=True)
         # self.esp_osdebug(None)
         if not self.get('mac'):
             self.set('mac', self.remote_eval(get_mac_address))
-        qprint(".")
+        qprint()
 
     def get_id(self):
         return self.id

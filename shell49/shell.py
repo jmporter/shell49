@@ -766,13 +766,9 @@ class Shell(cmd.Cmd):
         """
         if sys.platform.startswith('win'):
             ports = ['COM%s' % (i + 1) for i in range(256)]
-        elif sys.platform.startswith('linux') or sys.platform.startswith('cygwin'):
-            # this excludes your current terminal "/dev/tty"
-            ports = glob.glob('/dev/tty[A-Za-z]*')
-        elif sys.platform.startswith('darwin'):
-            ports = glob.glob('/dev/tty.*')
         else:
-            raise EnvironmentError('Unsupported platform')
+            ports = glob.glob('/dev/*')
+            ports = [ p for p in ports if 'usb' in p.lower() ]
 
         result = []
         for port in ports:
@@ -785,11 +781,14 @@ class Shell(cmd.Cmd):
         return result
 
     def do_ports(self, line):
-        for port in self.serial_ports():
-            if 'USB' in port:
-                oprint(port)
-            else:
-                qprint(port)
+        """do_ports
+
+        List available USB ports."""
+        available = self.serial_ports()
+        connected = [ d.address() for d in self.devs.devices() ]
+        all = sorted(set(available + connected))
+        for p in all:
+            oprint("{} {}".format("*" if p in connected else " ", p))
 
     def do_connect(self, line):
         """connect TYPE TYPE_PARAMS       Connect boards to shell49.

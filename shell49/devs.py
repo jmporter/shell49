@@ -19,9 +19,9 @@ class Devs:
         """Set/get default device id"""
         if index:
             try:
-                if self.devices()[index - 1]:
-                    self._default_dev = self._devices[index - 1]
-            except:
+                devs = list(self.devices())
+                self._default_dev = devs[index - 1]
+            except Exception as e:
                 pass
         if name:
             self._default_dev = self.find_device_by_name(name)

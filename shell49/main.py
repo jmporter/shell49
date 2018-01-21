@@ -122,6 +122,7 @@ Environment variables:
         return
 
     args.config = os.path.expanduser(args.config)
+    args.config = os.path.normpath(args.config)
 
     with Config(args.config) as config:
         devs = Devs(config)
