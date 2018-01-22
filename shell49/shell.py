@@ -16,6 +16,7 @@ from . mdns_client import MdnsListenter
 from . flasher import Flasher, FlasherError
 from . version import __version__
 
+from ast import literal_eval
 from datetime import datetime
 from tempfile import NamedTemporaryFile
 import argparse
@@ -594,7 +595,7 @@ class Shell(cmd.Cmd):
         value = ' '.join(args.value)
         try:
             # try to convert value to Python object (e.g. for numbers)
-            value = eval(value)
+            value = literal_eval(value)
         except:
             pass
         if not args.default and not def_dev:
