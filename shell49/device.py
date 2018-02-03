@@ -137,23 +137,27 @@ class Device(object):
         func_str = func_str.replace('HAS_BUFFER', '{}'.format(has_buffer))
         func_str = func_str.replace('BUFFER_SIZE', '{}'.format(buffer_size))
         func_str = func_str.replace('IS_UPY', 'True')
-        dprint('remote: {}({}) --> '.format(func.__name__, repr(args)[1:-1]), end='')
+        dprint('remote: {}({}) --> '.format(func.__name__, repr(args)[1:-1]), end='', flush=True)
         start_time = time.time()
         self.check_pyb()
         try:
+            dprint(' 1:{:.2f}s'.format(time.time()-start_time), end='')
             self.pyb.enter_raw_repl()
             self.check_pyb()
+            dprint(' 2:{:.2f}s'.format(time.time()-start_time), end='')
             output = self.pyb.exec_raw_no_follow(func_str)
             if xfer_func:
                 xfer_func(self, *args, **kwargs)
             self.check_pyb()
+            dprint(' 3:{:.2f}s'.format(time.time()-start_time), end='')
             output, _ = self.pyb.follow(timeout=10)
             self.check_pyb()
+            dprint(' 4:{:.2f}s'.format(time.time()-start_time), end='')
             self.pyb.exit_raw_repl()
         except (serial.serialutil.SerialException, TypeError):
             self.close()
             raise DeviceError('serial port %s closed' % self.address())
-        dprint(output, "   ({:.4}s)".format(time.time()-start_time))
+        dprint("{}   ({:.3}s)".format(output, time.time()-start_time))
         return output
 
     def remote_eval(self, func, *args, **kwargs):
@@ -292,12 +296,10 @@ class DeviceSerial(Device):
 
 class DeviceNet(Device):
 
-    def __init__(self, config, url):
+    def __init__(self, config, url, user, password):
         super().__init__(config)
         self.url = url
         self.ip_address = socket.gethostbyname(url)
-        user = self.get('user', default='micro')
-        password = self.get('password', default='python')
 
         try:
             pyb = Pyboard(ip=url, user=user, password=password)

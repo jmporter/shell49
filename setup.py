@@ -9,7 +9,7 @@ from shell49.version import __version__
 
 setup(
   name = 'shell49',
-  packages = ['shell49'],
+  packages = ['shell49', 'lib', 'lib/do'],
   version = __version__,
   description = 'Micropython remote shell',
   long_description = 'see https://github.com/bboser/shell49',
@@ -35,11 +35,12 @@ setup(
   install_requires=[
       'pyserial >= 2.0',
       'zeroconf >= 0.19',
-      'pyreadline'
+      'gnureadline'
   ],
   entry_points = {
       'console_scripts': [
-          'shell49=shell49.command_line:main'
+          'shell49=shell49.command_line:main',
+          'shell49edge=lib.main:main'
       ],
   },
 )

@@ -186,7 +186,13 @@ class Shell(cmd.Cmd):
             stop = self.onecmd(line)
             stop = self.postcmd(stop, line)
         else:
-            cmd.Cmd.cmdloop(self)
+            while True:
+                try:
+                    cmd.Cmd.cmdloop(self)
+                except PyboardError as e:
+                    eprint("***", e)
+                    if self.devs.default_device():
+                        self.devs.default_device().close()
 
     def onecmd(self, line):
         """Override onecmd.
@@ -562,13 +568,9 @@ class Shell(cmd.Cmd):
                 cprint("{:>20s} = {}".format(k, v), color=color)
 
     def do_config(self, line):
-        """config                                   Print option values.
-       config [-u] [-d] [--default] OPTION [VALUE]   Set/delete OPTION to VALUE.
-
-       Options:
-          --default                                  Act on default configuration, rather than default board.
-          -d                                         Delete rather than set OPTION.
-          -u                                         Upload configuration to default board.
+        """config        Print option values.
+       config [-u] [-d] [--default] OPTION [VALUE]
+                     Set/delete OPTION to VALUE.
         """
         def_dev = None
         board_id = 'default'
@@ -792,11 +794,11 @@ class Shell(cmd.Cmd):
             oprint("{} {}".format("*" if p in connected else " ", p))
 
     def do_connect(self, line):
-        """connect TYPE TYPE_PARAMS       Connect boards to shell49.
-        connect serial [port [baud]]   Serial connection. Uses defaults from config file.
-        connect telnet [url]           Wireless connection. If no url/ip address is
-                                       specified, connects to all known boards advertising
-                                       repl service via mDNS.
+        """connect TYPE TYPE_PARAMS            Connect boards to shell49.
+        connect serial [port [baud]]        Wired connection. Uses defaults from config file.
+        connect telnet [url [user [pwd]]]   Wireless connection. If no url/ip address is
+            specified, connects to all known boards advertising repl service via mDNS.
+            Optional user (default: 'micro') and password (default: 'python').
 
         Note: do not connect to the same board via serial AND telnet connections.
               Doing so may block communication with the board.
@@ -824,13 +826,16 @@ class Shell(cmd.Cmd):
             self.devs.connect_serial(port, baud)
         elif connect_type == 'telnet':
             if len(args) > 1:
-                self.devs.connect_telnet(args[1])
+                user = args[2] if len(args) > 2 else 'micro'
+                pwd  = args[3] if len(args) > 3 else 'python'
+                self.devs.connect_telnet(args[1], user, pwd)
             else:
                 listener = MdnsListenter()
                 for b in listener.listen(seconds=1):
                     qprint("Heard from '{}' ({})".format(b.url, b.ip))
                     # connect only to boards in the config database
-                    if not self.config.has_board_with_name(b.hostname):
+                    board_id = self.config.has_board_with_name(b.hostname)
+                    if not board_id:
                         qprint("  not in db, skip!")
                         continue
                     # we are not already connected to
@@ -838,7 +843,9 @@ class Shell(cmd.Cmd):
                         qprint("  already connected")
                         continue
                     # let's connect!
-                    self.devs.connect_telnet(b.url)
+                    user = self.config.get(board_id, 'user', 'micro')
+                    pwd  = self.config.get(board_id, 'password', 'python')
+                    self.devs.connect_telnet(b.url, user, pwd)
         else:
             eprint('Unrecognized connection TYPE: {}'.format(connect_type))
 
@@ -1152,7 +1159,7 @@ class Shell(cmd.Cmd):
                 save_timeout = dev.timeout()
                 # Set a timeout so that the read returns periodically with no data
                 # and allows us to check whether the main thread wants us to quit.
-                dev.timeout(0.5)
+                dev.timeout(1)
                 while not self.quit_serial_reader:
                     try:
                         char = dev.read(1)
@@ -1207,7 +1214,7 @@ class Shell(cmd.Cmd):
             line = line[2:]
 
         self.print(print_.PY_COLOR, end='')
-        self.print('Entering REPL. Use Control-%c to exit.' % QUIT_REPL_CHAR)
+        self.print('Entering REPL. Control-%c to exit.' % QUIT_REPL_CHAR)
         self.print('   Soft reset:  Control-D or sys.exit()')
         self.print('   Hard reset:  Reset button on board or machine.reset()')
         self.quit_serial_reader = False

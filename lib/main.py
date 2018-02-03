@@ -6,22 +6,31 @@
    programs.
 """
 
-from . config import Config
-from . shell import Shell
-from . devs import Devs
-from . device import DeviceError
-from . print_ import oprint, eprint, dprint, nocolor
-from . pyboard import PyboardError
-from . version import __version__
-import shell49.print_ as print_
+import inspect, sys, os
+dir = os.path.dirname(inspect.getfile(inspect.currentframe()))
+sys.path.insert(0, dir)
+sys.path.insert(0, os.path.join(dir, 'do'))
 
-import os
-import sys
+from config import Config
+from shell import Shell, attach_commands
+from activeboards import ActiveBoards
+from connection import ConnectionError
+from board import BoardError
+from version import __version__
+from printing import debug, quiet, nocolor, oprint, eprint, dprint, qprint
+import printing
+
 import argparse
 
 
-def real_main():
+def main():
     """The main program."""
+
+    if sys.version_info.major < 3:
+        v = sys.version_info
+        eprint("Shell49 requires Python 3.6 (not {}.{}.{})".format(v.major, v.minor, v.micro))
+        return
+
     default_config = os.getenv('SHELL49_CONFIG_FILE') or '~/.shell49_rc.py'
     default_editor = os.getenv('SHELL49_EDITOR') or os.getenv('VISUAL') or os.getenv('EDITOR') or 'vi'
     default_nocolor = 'win32' in sys.platform
@@ -53,11 +62,6 @@ Environment variables:
         default=default_editor
     )
     parser.add_argument(
-        "-f", "--file",
-        dest="filename",
-        help="Specify a file of commands to process."
-    )
-    parser.add_argument(
         "-d", "--debug",
         dest="debug",
         action="store_true",
@@ -70,13 +74,6 @@ Environment variables:
         action="store_true",
         help="Turn off colorized output (default: %s)" % default_nocolor,
         default=default_nocolor
-    )
-    parser.add_argument(
-        '-V', '--version',
-        dest='version',
-        action='store_true',
-        help='Report the version and exit.',
-        default=False
     )
     parser.add_argument(
         "--quiet",
@@ -93,87 +90,75 @@ Environment variables:
         default=True
     )
     parser.add_argument(
-        "--timing",
-        dest="timing",
-        action="store_true",
-        help="Print timing information about each command",
+        '-V', '--version',
+        dest='version',
+        action='store_true',
+        help='Report the version and exit.',
         default=False
+    )
+    parser.add_argument(
+        "-f", "--file",
+        dest="filename",
+        help="File of commands to process (non-interactive)."
     )
     parser.add_argument(
         "cmd",
         nargs=argparse.REMAINDER,
-        help="Optional command to execute"
+        help="Optional command to execute and quit."
     )
     args = parser.parse_args(sys.argv[1:])
 
-    print_.DEBUG = args.debug
-    print_.QUIET = args.quiet
-    if args.nocolor:
-        nocolor()
+    debug(args.debug)
+    quiet(args.quiet or args.cmd or args.filename)
+    if args.nocolor: nocolor()
 
+    dprint("config = %s" % args.config)
+    dprint("editor = %s" % args.editor)
     dprint("debug = %s" % args.debug)
-    dprint("quiet = %d" % args.quiet)
-    dprint("nocolor = %d" % args.nocolor)
-    dprint("timing = %d" % args.timing)
+    dprint("quiet = %s" % args.quiet)
+    dprint("nocolor = %s" % args.nocolor)
+    dprint("auto_connect = %s" % args.auto_connect)
+    dprint("version = %s" % __version__)
     dprint("cmd = [%s]" % ', '.join(args.cmd))
 
     if args.version:
         print(__version__)
         return
 
+    cmd_line = ' '.join(args.cmd)
+    if not args.filename and cmd_line == '':
+        oprint("Welcome to shell49 version {}. Type 'help' for information; Control-D to exit.".format(__version__))
+
     args.config = os.path.expanduser(args.config)
     args.config = os.path.normpath(args.config)
 
     with Config(args.config) as config:
-        devs = Devs(config)
+        boards = ActiveBoards(config)
 
+        # connect to board ...
         try:
             if args.auto_connect:
-                devs.connect_serial(config.get('default', 'port'))
-        except DeviceError as err:
+                boards.connect_serial(config.get('default', 'port'))
+        except (ConnectionError, BoardError) as err:
             eprint(err)
-        except PyboardError as e:
-            eprint(e)
         except KeyboardInterrupt:
             pass
 
+        # start command shell
+        attach_commands()
         if args.filename:
             with open(args.filename) as cmd_file:
-                shell = Shell(args.editor, config, devs, stdin=cmd_file,
-                              filename=args.filename, timing=args.timing)
+                shell = Shell(boards, args.editor, stdin=cmd_file)
                 shell.cmdloop('')
         else:
-            cmd_line = ' '.join(args.cmd)
-            if cmd_line == '':
-                oprint(
-                    "Welcome to shell49. Type 'help' for information; Control-D to exit.\n")
-            if devs.num_devices() == 0:
-                eprint(
-                    'No MicroPython boards connected - use the connect command to add one.\n')
-            shell = Shell(args.editor, config, devs, timing=args.timing)
+            if boards.num_boards() == 0:
+                eprint("No MicroPython boards connected - use the connect command to add one.")
+            shell = Shell(boards, args.editor)
             try:
                 shell.cmdloop(cmd_line)
             except KeyboardInterrupt:
-                print('')
-
-
-def main():
-    """This main function saves the stdin termios settings, calls real_main,
-       and restores stdin termios settings when it returns.
-    """
-    save_settings = None
-    stdin_fd = -1
-    try:
-        import termios
-        stdin_fd = sys.stdin.fileno()
-        save_settings = termios.tcgetattr(stdin_fd)
-    except:
-        pass
-    try:
-        real_main()
-    finally:
-        if save_settings:
-            termios.tcsetattr(stdin_fd, termios.TCSANOW, save_settings)
+                qprint("Bye")
+    print(printing.NO_COLOR)
 
 
 if __name__ == "__main__":

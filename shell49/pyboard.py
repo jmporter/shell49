@@ -7,7 +7,7 @@ This module provides the Pyboard class, used to communicate with and
 control the pyboard over a serial USB or telent connection.
 """
 
-from . print_ import oprint
+from . print_ import oprint, dprint
 
 import sys
 import time
@@ -31,19 +31,23 @@ class PyboardError(BaseException):
 
 class TelnetToSerial:
     def __init__(self, ip, user, password, read_timeout=5):
+        dprint("TelnetToSerial({}, user='{}', password='{}')".format(ip, user, password))
         import telnetlib
         self.ip = ip
         self.tn = telnetlib.Telnet(ip, timeout=15)
         self.read_timeout = read_timeout
         if b'Login as:' in self.tn.read_until(b'Login as:', timeout=read_timeout):
             self.tn.write(bytes(user, 'ascii') + b"\r\n")
+            dprint("sent user")
 
             if b'Password:' in self.tn.read_until(b'Password:', timeout=read_timeout):
                 # needed because of internal implementation details of the telnet server
                 time.sleep(0.2)
                 self.tn.write(bytes(password, 'ascii') + b"\r\n")
+                dprint("sent password")
 
                 if b'for more information.' in self.tn.read_until(b'Type "help()" for more information.', timeout=read_timeout):
+                    dprint("got greeting")
                     # login succesful
                     from collections import deque
                     self.fifo = deque()
@@ -201,6 +205,7 @@ class Pyboard:
             raise PyboardError('could not enter raw repl: expected {}, got {}'.format(expect, data))
         # By splitting this into 2 reads, it allows boot.py to print stuff,
         # which will show up after the soft reboot and before the raw REPL.
+        # The next read_until takes ~0.8 seconds (on ESP32)
         expect = b'raw REPL; CTRL-B to exit\r\n'
         data = self.read_until(1, expect)
         if not data.endswith(expect):

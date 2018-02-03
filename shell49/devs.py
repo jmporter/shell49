@@ -79,10 +79,10 @@ class Devs:
         dev = DeviceSerial(self.config, port, baudrate)
         self.add_device(dev)
 
-    def connect_telnet(self, ip_address):
+    def connect_telnet(self, ip_address, user='micro', pwd='python'):
         """Connect to MicroPython board at specified IP address."""
         qprint("Connecting via telnet to '{}' ...".format(ip_address))
-        dev = DeviceNet(self.config, ip_address)
+        dev = DeviceNet(self.config, ip_address, user, pwd)
         self.add_device(dev)
 
     def add_device(self, dev):

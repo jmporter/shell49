@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-from . print_ import qprint, eprint, dprint, oprint
+from printing import qprint, eprint, dprint, oprint
 
 from pprint import pprint
 from datetime import datetime
@@ -69,7 +69,7 @@ class Config:
         except KeyError:
             pass
 
-    def has_board_with_name(self, name):
+    def get_board_from_name(self, name):
         """Return board_id of board with 'name', None if no such board."""
         for b_id, d in self._boards().items():
             if d.get('name', None) == name:
@@ -94,10 +94,10 @@ class Config:
                 'board': 'HUZZAH32',
                 'baudrate': 115200,
                 'buffer_size': 1024,
-                'binary_transfer': True,
                 'time_offset': 946684800,
                 'user': 'micro',
                 'password': 'python',
+                'startup_dir': '.',
                 'host_dir': '.',
                 'remote_dir': '/flash',
                 'rsync_includes': '*.py,*.json,*.txt,*.html',
