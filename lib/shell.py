@@ -7,8 +7,24 @@ import printing
 
 import sys
 
+# apparently readline differs for various os'es
+
+# https://pypi.python.org/pypi/gnureadline
+# Mac: install gnureadline
+#    Some platforms, such as macOS, do not ship with GNU readline installed.
+#    As the alternatives to GNU readline do not have fully equivalent functionality, ...
+# Linux: no install needed
+#    This module is usually unnecessary on Linux and other Unix systems with
+#    default readline support.
+# Win: pyreadline
+#    If you are using Windows, which also ships without GNU readline, you might
+#    want to consider using the pyreadline module instead, which is a readline
+#    replacement written in pure Python that interacts with the Windows clipboard.
 try:
-    import gnureadline as readline
+    if sys.platform == 'darwin':
+        import gnureadline as readline
+    elif sys.platform == 'win32':
+        import pyreadline as readline
     sys.modules['readline'] = readline
 except ImportError:
     import readline

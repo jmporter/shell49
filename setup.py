@@ -7,6 +7,18 @@ if sys.version_info < (3,4):
 
 from shell49.version import __version__
 
+# Platform dependinent dependencies:
+#   OSX:   gnureadline
+#   Win:   pyreadline
+install_req=[
+    'pyserial >= 2.0',
+    'zeroconf >= 0.19'
+]
+if sys.platform == 'darwin':
+    install_req.append('gnureadline')
+if sys.platform == 'win32':
+    install_req.append('pyreadline')
+
 setup(
   name = 'shell49',
   packages = ['shell49', 'lib', 'lib/do'],
@@ -32,11 +44,7 @@ setup(
       'Topic :: Terminals :: Serial',
       'Topic :: Utilities',
   ],
-  install_requires=[
-      'pyserial >= 2.0',
-      'zeroconf >= 0.19',
-      'gnureadline'
-  ],
+  install_requires=install_req,
   entry_points = {
       'console_scripts': [
           'shell49=shell49.command_line:main',

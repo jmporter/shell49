@@ -1,4 +1,4 @@
-#! python
+#! /anaconda/bin/python
 
 """Remote shell for MicroPython.
 
