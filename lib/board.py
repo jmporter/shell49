@@ -380,11 +380,11 @@ class Board(object):
             eprint(str(e).replace('\n', '\r'))
         except Exception:
             # catchall, print error traceback
-            from StringIO import StringIO
+            from io import StringIO
             s = StringIO()
             print('\r', printing.ERR_COLOR)
             traceback.print_exc(file=s)
-            eprint(s.getValue().replace('\n', '\r'))
+            eprint(s.getvalue().replace('\n', '\r'))
 
 
     def repl(self, getch, putch):

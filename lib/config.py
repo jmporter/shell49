@@ -5,6 +5,7 @@ from printing import qprint, eprint, dprint, oprint
 from pprint import pprint
 from datetime import datetime
 from ast import literal_eval
+from binascii import unhexlify
 import keyword
 import sys
 import os
@@ -84,6 +85,16 @@ class Config:
             return set(keys)
         except:
             return []
+
+    def mac_table(self):
+        """Dict board name --> mac address"""
+        macs = {}
+        for board in self._boards().values():
+            name = board.get('name')
+            mac  = board.get('mac')
+            if name and mac:
+                macs[name] = unhexlify(mac.replace(':', ''))
+        return macs
 
     def _boards(self):
         return self._config['boards']

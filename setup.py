@@ -1,11 +1,11 @@
 from setuptools import setup
 import sys
 
-if sys.version_info < (3,4):
-    print('shell49 requires Python 3.4 or newer.')
+if sys.version_info < (3,6):
+    print('shell49 requires Python 3.6')
     sys.exit(1)
 
-from shell49.version import __version__
+from lib.version import __version__
 
 # Platform dependinent dependencies:
 #   OSX:   gnureadline
@@ -38,17 +38,18 @@ setup(
       'Natural Language :: English',
       'Operating System :: POSIX :: Linux',
       'Programming Language :: Python',
-      'Programming Language :: Python :: 3',
+      'Programming Language :: Python :: 3.6',
       'Topic :: Software Development :: Embedded Systems',
       'Topic :: System :: Shells',
       'Topic :: Terminals :: Serial',
+      'Topic :: Terminals :: Telnet',
       'Topic :: Utilities',
   ],
   install_requires=install_req,
   entry_points = {
       'console_scripts': [
           'shell49=shell49.command_line:main',
-          'shell49edge=lib.main:main'
+          'shell49v2=lib.main:main'
       ],
   },
 )

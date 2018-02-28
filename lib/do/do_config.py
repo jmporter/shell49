@@ -112,6 +112,7 @@ def do_config(self, line):
             print("# config.py, created on {}".format(now), file=f)
             for key in default_board.config_options():
                 print("{} = {}".format(key, repr(default_board.get_config(key))), file=f)
+            print("mac_table = {}".format(repr(self.config.mac_table())), file=f)
             f.close()
             dst = os.path.join(default_board.get_config('remote_dir', '/flash'), 'config.py')
             cp(self.boards, temp.name, dst)

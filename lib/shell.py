@@ -89,6 +89,8 @@ class Shell(cmd.Cmd):
             return res
         except (BoardError, ConnectionError) as e:
             eprint("***", e)
+        except UnicodeDecodeError as e:
+            eprint("***", e)
         except KeyboardInterrupt:
             eprint("Command aborted")
         except Exception as e:
