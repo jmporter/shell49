@@ -23,8 +23,8 @@ import sys
 try:
     if sys.platform == 'darwin':
         import gnureadline as readline
-    elif sys.platform == 'win32':
-        import pyreadline as readline
+    # elif sys.platform == 'win32':
+    #     import pyreadline as readline
     sys.modules['readline'] = readline
 except ImportError:
     import readline
@@ -77,7 +77,10 @@ class Shell(cmd.Cmd):
         else:
             # interactive
             self.interactive = True
-            readline.set_completer_delims(self.DELIMS)
+            try:
+                readline.set_completer_delims(self.DELIMS)
+            except AttributeError:
+                qprint("Command completion not supported (Windows)")
             self.set_prompt()
             cmd.Cmd.cmdloop(self)
 
