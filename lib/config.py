@@ -129,6 +129,8 @@ class Config:
             self._modified = True
         except SyntaxError as e:
             eprint("Syntax error in {}: {}".format(self._config_file, e))
+            eprint("If the problem persists, manually check the file for "
+                   "invalid Python syntax or delete it and re-enter the configuration information.")
             sys.exit()
 
     def save(self):

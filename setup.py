@@ -21,7 +21,7 @@ if sys.platform == 'win32':
 
 setup(
   name = 'shell49',
-  packages = ['shell49', 'lib', 'lib/do'],
+  packages = ['lib', 'lib/do'],
   version = __version__,
   description = 'Micropython remote shell',
   long_description = 'see https://github.com/bboser/shell49',
@@ -48,8 +48,7 @@ setup(
   install_requires=install_req,
   entry_points = {
       'console_scripts': [
-          'shell49=shell49.command_line:main',
-          'shell49v2=lib.main:main'
+          'shell49=lib.main:main'
       ],
   },
 )
