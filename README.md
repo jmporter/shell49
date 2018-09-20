@@ -56,7 +56,7 @@ help
 * [Run program stored in file on host](doc/run.md)
 * Copy files to/from MicroPython board. See `help` for `cp`, `rsync`, `ls`, `mkdir`, `cd`, `rm`.
 
-### Caveats
+## Caveats
 
 Beware of the different prompts:
 
