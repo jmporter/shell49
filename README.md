@@ -55,3 +55,13 @@ help
 * REPL console - type `repl` at the `shell49` prompt
 * [Run program stored in file on host](doc/run.md)
 * Copy files to/from MicroPython board. See `help` for `cp`, `rsync`, `ls`, `mkdir`, `cd`, `rm`.
+
+### Caveats
+
+Beware of the different prompts:
+
+1. Operating system (terminal program) prompt: E.g. `$` (depends on operating system)
+2. `shell49` prompt: `>`
+3. Repl prompt (invoked at `>` prompt in `shell49` with `repl`): `>>>`
+
+On some systems `shell49` uses different colors as further indication of the mode it is in.

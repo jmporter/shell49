@@ -1,4 +1,4 @@
-#! /anaconda/bin/python
+#!/usr/bin/env python3
 
 """Remote shell for MicroPython.
 

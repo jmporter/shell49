@@ -355,7 +355,7 @@ class Board(object):
             return eval(res)
         except (SyntaxError, ValueError) as e:
             eprint("*** remote_eval({}, {}, {}) -> \n{} is not valid python code".format(
-                func.__name__, args, kwargs, res))
+                func.__name__, args, kwargs, res.decode('utf-8')))
             return None
 
     ###################################################################
