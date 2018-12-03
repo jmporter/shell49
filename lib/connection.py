@@ -1,9 +1,15 @@
 from printing import qprint, dprint
 
 from serial import Serial
+from serial.tools.list_ports import comports
 from serial.serialutil import SerialException
 import time
 import os
+
+# Vendor IDs
+ADAFRUIT_VID = 0x239A # SAMD
+ESP8266_VID  = 0x10C4 # Huzzah ESP8266
+
 
 """Serial or Telnet connection to a MicroPython REPL."""
 
@@ -89,8 +95,20 @@ class Connection:
 
 class SerialConnection(Connection):
 
-    def __init__(self, port, baudrate):
+    def __init__(self, port=None, baudrate=115200):
+        self.is_circuitpy = False
         try:
+            # check which ports are available
+            port = None
+            if not port:
+                for p in comports():
+                    if p.vid == ADAFRUIT_VID:
+                        port = p.device
+                        self.is_circuitpy = True
+                        break
+                    elif p.vid:
+                        qprint(f"unknown board {p} with vid '{p.vid}'")
+
             # wait for port to come online
             for wait in range(3):
                 if os.path.exists(port): break
@@ -99,7 +117,7 @@ class SerialConnection(Connection):
             # try to connect
             for attempt in range(5):
                 try:
-                    self._serial = Serial(port, baudrate, inter_byte_timeout=1)
+                    self._serial = Serial(port, baudrate, parity='N', inter_byte_timeout=1)
                     break
                 except IOError as e:
                     qprint("Waiting for serial connection at '{}'".format(port))
@@ -170,6 +188,10 @@ class SerialConnection(Connection):
     def match(self, port):
         """Checks if board is connected on port"""
         return self._port == port
+
+    @property
+    def is_circuit_python(self):
+        return self.is_circuitpy
 
 
 class TelnetConnection(Connection):

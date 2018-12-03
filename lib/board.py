@@ -62,19 +62,20 @@ class Board(object):
         # check buffer
         qprint(" has_buffer=", end='', flush=True)
         self._has_buffer = self.remote_eval(test_buffer)
-        # get root dirs
-        qprint("{} dirs=".format(self._has_buffer), end='', flush=True)
-        self._root_dirs = ['/{}/'.format(dir) for dir in self.remote_eval(listroot)]
-        qprint(self._root_dirs, end='', flush=True)
-        if not self.get_config('mac'):
-            qprint(" mac=", end='', flush=True)
-            self.set_config('mac', self.remote_eval(get_mac_address))
-            qprint(self.get_config('mac'), end='', flush=True)
-        # sync time
-        now = time.localtime(time.time())
-        qprint(" sync time ...")
-        self.remote(set_time, now.tm_year, now.tm_mon, now.tm_mday,
-                    now.tm_hour, now.tm_min, now.tm_sec)
+        if not self._serial.is_circuit_python:
+            # get root dirs
+            qprint("{} dirs=".format(self._has_buffer), end='', flush=True)
+            self._root_dirs = ['/{}/'.format(dir) for dir in self.remote_eval(listroot)]
+            qprint(self._root_dirs, end='', flush=True)
+            if not self.get_config('mac'):
+                qprint(" mac=", end='', flush=True)
+                self.set_config('mac', self.remote_eval(get_mac_address))
+                qprint(self.get_config('mac'), end='', flush=True)
+            # sync time
+            now = time.localtime(time.time())
+            qprint(" sync time ...")
+            self.remote(set_time, now.tm_year, now.tm_mon, now.tm_mday,
+                        now.tm_hour, now.tm_min, now.tm_sec)
         qprint()
 
     def disconnect(self):
@@ -120,7 +121,7 @@ class Board(object):
     @property
     def name(self):
         """Get board name"""
-        return self.get_config('name', 'nameless board')
+        return self.get_config('name', 'py')
 
     @property
     def name_path(self):
@@ -188,6 +189,33 @@ class Board(object):
 
     def enter_raw_repl(self):
         """Enter raw repl if not already in this mode."""
+        if self._serial.is_circuit_python:
+            self.enter_raw_repl_cp()
+        else:
+            self.enter_raw_repl_mp()
+
+    def enter_raw_repl_cp(self):
+        """Enter raw repl if not already in this mode for CIRCUITPYTHON."""
+        # Ctrl-C twice: interrupt any running program
+        dprint("^C, abort running program")
+        self._serial.write(b'\r\x03\x03')
+
+        # Ctrl-A: enter raw REPL
+        dprint("^A, raw repl")
+        self._serial.write(b'\r\x01')
+
+        expect = b"raw REPL; CTRL-B to exit"
+        data = self._serial.read_until(1, expect)
+        if not data.endswith(expect):
+            raise BoardError('Cannot enter raw repl: expected {}, got {}'.format(expect, data))
+
+        expect = b"\r\n"
+        data = self._serial.read_until(1, expect)
+        if not data.endswith(expect):
+            raise BoardError('Cannot enter raw repl: expected {}, got {}'.format(expect, data))
+
+    def enter_raw_repl_mp(self):
+        """Enter raw repl if not already in this mode for MICROPYTHON."""
         # Ctrl-C twice: interrupt any running program
         dprint("^C, abort running program")
         self._serial.write(b'\r\x03\x03')
