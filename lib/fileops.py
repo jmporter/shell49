@@ -571,7 +571,7 @@ def rsync(devs, src_dir, dst_dir, mirror, dry_run, recursed):
 def recv_file_from_host(src_file, dst_filename, filesize, dst_mode='wb'):
     """Function which runs on the pyboard. Matches up with send_file_to_remote."""
     import sys
-    import ubinascii
+    import binascii
     if HAS_BUFFER:
         try:
             import pyb
@@ -613,7 +613,7 @@ def recv_file_from_host(src_file, dst_filename, filesize, dst_mode='wb'):
                 if HAS_BUFFER:
                     dst_file.write(write_buf[0:read_size])
                 else:
-                    dst_file.write(ubinascii.unhexlify(write_buf[0:read_size]))
+                    dst_file.write(binascii.unhexlify(write_buf[0:read_size]))
                 # Send back an ack as a form of flow control
                 sys.stdout.write('\x06')
                 bytes_remaining -= read_size
@@ -683,7 +683,7 @@ def recv_file_from_remote(dev, src_filename, dst_file, filesize):
 def send_file_to_host(src_filename, dst_file, filesize):
     """Function which runs on the pyboard. Matches up with recv_file_from_remote."""
     import sys
-    import ubinascii
+    import binascii
     try:
         with open(src_filename, 'rb') as src_file:
             bytes_remaining = filesize
@@ -697,7 +697,7 @@ def send_file_to_host(src_filename, dst_file, filesize):
                 if HAS_BUFFER:
                     sys.stdout.buffer.write(buf)
                 else:
-                    sys.stdout.write(ubinascii.hexlify(buf))
+                    sys.stdout.write(binascii.hexlify(buf))
                 bytes_remaining -= read_size
                 # Wait for an ack so we don't get ahead of the remote
                 while True:

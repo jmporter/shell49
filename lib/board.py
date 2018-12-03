@@ -60,9 +60,11 @@ class Board(object):
         self._id = self.remote_eval(get_unique_id, 'BOARD HAS NO ID')
         qprint("Connected to '{}' (id={}) ...".format(self.name, self.id), end='', flush=True)
         # check buffer
-        qprint(" has_buffer=", end='', flush=True)
         self._has_buffer = self.remote_eval(test_buffer)
-        if not self._serial.is_circuit_python:
+        qprint(" has_buffer={}".format(self._has_buffer), end='', flush=True)
+        if self._serial.is_circuit_python:
+            qprint()
+        else:
             # get root dirs
             qprint("{} dirs=".format(self._has_buffer), end='', flush=True)
             self._root_dirs = ['/{}/'.format(dir) for dir in self.remote_eval(listroot)]
@@ -456,11 +458,16 @@ class Board(object):
 def get_unique_id(default):
     """Inquire the boards unique id."""
     try:
-        from machine import unique_id
+        from microcontroller import cpu
         from binascii import hexlify
-        uid = hexlify(unique_id()).decode('ascii')
+        uid = hexlify(cpu.uid).decode('ascii')
     except:
-        uid = default
+        try:
+            from machine import unique_id
+            from binascii import hexlify
+            uid = hexlify(unique_id()).decode('ascii')
+        except:
+            uid = default
     return repr(uid)
 
 def listroot():
