@@ -141,7 +141,7 @@ class SerialConnection(Connection):
                     time.sleep(0.5)
                     qprint("Trying to talk to the MicroPython interpreter")
             self._port = port
-            qprint("SerialConnection established")
+            qprint(f"SerialConnection to {port} established")
         except AttributeError:
             raise ConnectionError("Failed connecting to board at '{}'".format(port))
         except KeyboardInterrupt:
