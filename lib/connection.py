@@ -101,8 +101,9 @@ class SerialConnection(Connection):
                 try:
                     self._serial = Serial(port, baudrate, inter_byte_timeout=1)
                     break
-                except IOError:
+                except IOError as e:
                     qprint("Waiting for serial connection at '{}'".format(port))
+                    qprint(e)
                 time.sleep(1)
             # send Control-C to put MicroPython in known state
             for attempt in range(20):
@@ -113,6 +114,7 @@ class SerialConnection(Connection):
                     time.sleep(0.5)
                     qprint("Trying to talk to the MicroPython interpreter")
             self._port = port
+            qprint("SerialConnection established")
         except AttributeError:
             raise ConnectionError("Failed connecting to board at '{}'".format(port))
         except KeyboardInterrupt:

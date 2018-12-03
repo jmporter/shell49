@@ -442,7 +442,7 @@ def file_dir(devs, directory):
     dev, filename = devs.get_dev_and_path(directory)
     inc = devs.config.get(0, 'rsync_includes',
                           default='*.py,*.json,*.txt,*.html').split(',')
-    exc = devs.config.get(0, 'rsync_excludes', default='.*,__*__').split(',')
+    exc = devs.config.get(0, 'rsync_excludes', default='.DS_store,__*__').split(',')
     files = auto(devs, listdir_stat, directory)
     if not files:
         files = []
