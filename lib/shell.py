@@ -26,6 +26,8 @@ try:
     elif sys.platform == 'win32':
         # import pyreadline as readline
         import readline
+    else:
+        import readline
     sys.modules['readline'] = readline
 except ImportError:
     import readline

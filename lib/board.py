@@ -219,8 +219,12 @@ class Board(object):
     def enter_raw_repl_mp(self):
         """Enter raw repl if not already in this mode for MICROPYTHON."""
         # Ctrl-C twice: interrupt any running program
-        dprint("^C, abort running program")
-        self._serial.write(b'\r\x03\x03')
+        dprint("^B^C, abort running program")
+        self._serial.write(b'\r\x02\x03\x03')
+
+        # Give time to Microcontroller to respond
+        expect = b'> '
+        self._serial.read_until(1, expect)
 
         # discard any waiting input
         dprint("purge in_waiting")
@@ -401,8 +405,12 @@ class Board(object):
                 self._serial.timeout = 0.4
                 while not self._quit_serial_reader:
                     char = self._serial.read(1)
-                    if char:
+                    if char == b'\x08':
+                        dump = self._serial.read(3)
                         putch(char)
+                    elif char:
+                        putch(char)
+                        #putch(b'a')
                 self._serial.timeout = save_timeout
         except ConnectionError as e:
             self.disconnect()

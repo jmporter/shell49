@@ -3,7 +3,6 @@ from getch import getch
 from printing import eprint, mprint
 import printing
 
-
 def do_repl(self, line):
     """repl [board-name] [~ line [~]]
 
@@ -39,4 +38,5 @@ def do_repl(self, line):
 
 
 def putch(byte):
+  #  pass
     print(byte.decode('utf-8'), end='', flush=True)
