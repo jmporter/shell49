@@ -38,7 +38,7 @@ class Connection:
         """Write bytes from device"""
         raise NotImplementedError("write: connection is abstract")
 
-    def read_until(self, min_num_bytes, ending, timeout=10, data_consumer=None):
+    def read_until(self, min_num_bytes, ending, timeout=2, data_consumer=None):
         """Read from board until 'ending'. Timeout None disables timeout."""
         dprint("read_until({}, {})".format(min_num_bytes, ending))
         data = self.read(min_num_bytes)
@@ -119,14 +119,14 @@ class SerialConnection(Connection):
                 sys.exit(1)
 
             # wait for port to come online
-            for wait in range(3):
-                if os.path.exists(port): break
-                qprint("Waiting for port '{}' to come online".format(port))
-                time.sleep(1)
+            #for wait in range(3):
+             #   if os.path.exists(port): break
+              #  qprint("Waiting for port '{}' to come online".format(port))
+              #  time.sleep(1)
             # try to connect
             for attempt in range(5):
                 try:
-                    self._serial = Serial(port, baudrate, parity='N', inter_byte_timeout=1)
+                    self._serial = Serial(port, baudrate, parity='N', inter_byte_timeout=.1)
                     break
                 except IOError as e:
                     qprint("Waiting for serial connection at '{}'".format(port))
@@ -136,6 +136,7 @@ class SerialConnection(Connection):
             for attempt in range(20):
                 try:
                     self._serial.write(b'\x03')
+                    time.sleep(1)
                     break
                 except SerialException:
                     time.sleep(0.5)
