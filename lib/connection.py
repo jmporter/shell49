@@ -41,7 +41,9 @@ class Connection:
     def read_until(self, min_num_bytes, ending, timeout=2, data_consumer=None):
         """Read from board until 'ending'. Timeout None disables timeout."""
         dprint("read_until({}, {})".format(min_num_bytes, ending))
+        dprint(self.timeout)
         data = self.read(min_num_bytes)
+        dprint('derp')
         if data_consumer:
             data_consumer(data)
         timeout_count = 0
@@ -52,11 +54,13 @@ class Connection:
             elif self.in_waiting > 0:
                 new_data = self.read(1)
                 data = data + new_data
+                dprint(data)
                 if data_consumer:
                     data_consumer(new_data)
                 timeout_count = 0
             else:
                 timeout_count += 1
+                dprint('timeout_count' + str(timeout_count))
                 if timeout and timeout_count >= 100 * timeout:
                     raise ConnectionError('timeout in read_until "{}"'.format(ending))
                 time.sleep(0.01)
@@ -97,7 +101,7 @@ class Connection:
 
 class SerialConnection(Connection):
 
-    def __init__(self, port=None, baudrate=115200):
+    def __init__(self, port=None, baudrate=115200, timeout=None):
         self.is_circuitpy = False
         try:
             # check which ports are available
@@ -126,7 +130,7 @@ class SerialConnection(Connection):
             # try to connect
             for attempt in range(5):
                 try:
-                    self._serial = Serial(port, baudrate, parity='N', inter_byte_timeout=.1)
+                    self._serial = Serial(port, baudrate, parity='N', inter_byte_timeout=.1,timeout=timeout)
                     break
                 except IOError as e:
                     qprint("Waiting for serial connection at '{}'".format(port))
