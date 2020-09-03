@@ -64,7 +64,7 @@ class Flasher:
                 # flash
                 qprint("flashing ...", cmd)
                 self._esptool(cmd)
-        except PermissionError:
+        except (PermissionError, NotADirectoryError):
             # Windows throws error
             pass
 
